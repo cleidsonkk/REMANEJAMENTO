@@ -38,7 +38,7 @@ npm install
 ```env
 DATABASE_URL="..."
 NEXTAUTH_SECRET="..."
-NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_URL="https://seu-projeto.vercel.app"
 SEED_ADMIN_NAME="Administrador Planejamento"
 SEED_ADMIN_EMAIL="admin@umbauuba.se.gov.br"
 SEED_ADMIN_CPF="00000000000"
@@ -58,6 +58,20 @@ npm run prisma:seed
 ```bash
 npm run dev
 ```
+
+## Deploy na Vercel
+
+- o projeto agora executa `prisma generate` automaticamente no `postinstall`
+- a Vercel usa `npm run vercel-build`, que garante:
+
+```bash
+prisma generate && next build
+```
+
+- variáveis obrigatórias na Vercel:
+  - `DATABASE_URL`
+  - `NEXTAUTH_SECRET`
+  - `NEXTAUTH_URL`
 
 ## Testes automatizados
 
