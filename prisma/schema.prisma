@@ -1,0 +1,174 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN_PLANEJAMENTO
+  USUARIO_SECRETARIA
+}
+
+enum UserStatus {
+  ATIVO
+  INATIVO
+}
+
+enum RemanejamentoStatus {
+  PENDENTE
+  REALIZADO
+  CANCELADO
+}
+
+model Secretaria {
+  id                 String                 @id @default(cuid())
+  codigo             Int                    @unique
+  nomeSecretaria     String
+  sigla              String?
+  unidadeOrcamentaria String
+  nomeSecretario     String
+  statusAtivo        Boolean                @default(true)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  users              User[]                 @relation("PrimarySecretariaUsers")
+  userLinks          UserSecretaria[]
+  remanejamentos     Remanejamento[]
+  catalogItems       SecretariaCatalogItem[]
+
+  @@index([nomeSecretaria])
+  @@index([statusAtivo])
+}
+
+model SecretariaCatalogItem {
+  id                 String      @id @default(cuid())
+  secretariaId       String
+  secretaria         Secretaria  @relation(fields: [secretariaId], references: [id], onDelete: Cascade)
+  acao               String
+  fonte              String
+  elemento           String
+  funcao             String?
+  subFuncao          String?
+  programa           String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  @@unique([secretariaId, acao, fonte, elemento])
+  @@index([secretariaId])
+}
+
+model User {
+  id            String      @id @default(cuid())
+  nome          String
+  cpf           String      @unique
+  email         String      @unique
+  telefone      String?
+  senhaHash     String
+  role          UserRole
+  secretariaId  String?
+  secretaria    Secretaria? @relation("PrimarySecretariaUsers", fields: [secretariaId], references: [id])
+  status        UserStatus  @default(ATIVO)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  secretariasVinculadas UserSecretaria[]
+  remanejamentos Remanejamento[] @relation("SolicitanteRemanejamentos")
+  auditLogs     AuditLog[]
+
+  @@index([secretariaId])
+  @@index([role, status])
+}
+
+model UserSecretaria {
+  userId       String
+  secretariaId String
+  createdAt    DateTime   @default(now())
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  secretaria    Secretaria @relation(fields: [secretariaId], references: [id], onDelete: Cascade)
+
+  @@id([userId, secretariaId])
+  @@index([secretariaId])
+}
+
+model Remanejamento {
+  id                       String               @id @default(cuid())
+  protocolo                String               @unique
+  loteProtocolo            String?
+  loteSequencia            Int                  @default(1)
+  secretariaId             String
+  secretaria               Secretaria           @relation(fields: [secretariaId], references: [id])
+  solicitanteId            String
+  solicitante              User                 @relation("SolicitanteRemanejamentos", fields: [solicitanteId], references: [id])
+  unidadeOrcamentaria      String
+  nomeSecretaria           String
+  nomeSecretario           String
+  nomeSolicitante          String
+  cpfSolicitante           String
+  justificativa            String               @db.Text
+  dataSolicitacao          DateTime             @default(now())
+  status                   RemanejamentoStatus  @default(PENDENTE)
+  dataConclusao            DateTime?
+  destinoAcao              String
+  destinoFonte             String
+  destinoElemento          String
+  destinoValor             Decimal              @db.Decimal(14, 2)
+  origemAcao               String
+  origemFonte              String
+  origemElemento           String
+  origemValor              Decimal              @db.Decimal(14, 2)
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+  executado                RemanejamentoExecutado?
+
+  @@index([secretariaId])
+  @@index([solicitanteId])
+  @@index([status, createdAt])
+  @@index([dataSolicitacao])
+  @@index([loteProtocolo, loteSequencia])
+}
+
+model RemanejamentoExecutado {
+  id                    String         @id @default(cuid())
+  remanejamentoId       String         @unique
+  remanejamento         Remanejamento  @relation(fields: [remanejamentoId], references: [id], onDelete: Cascade)
+  protocolo             String         @unique
+  loteProtocolo         String?
+  loteSequencia         Int            @default(1)
+  dataSolicitacao       DateTime
+  dataRemanejamento     DateTime
+  secretaria            String
+  unidadeOrcamentaria   String
+  nomeSecretario        String
+  nomeSolicitante       String
+  cpfSolicitante        String
+  justificativa         String         @db.Text
+  adicaoAcao            String
+  adicaoFonte           String
+  adicaoElemento        String
+  adicaoValor           Decimal        @db.Decimal(14, 2)
+  anulacaoAcao          String
+  anulacaoFonte         String
+  anulacaoElemento      String
+  anulacaoValor         Decimal        @db.Decimal(14, 2)
+  createdAt             DateTime       @default(now())
+
+  @@index([dataRemanejamento])
+  @@index([cpfSolicitante])
+  @@index([loteProtocolo, loteSequencia])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  entity     String
+  entityId   String?
+  oldData    Json?
+  newData    Json?
+  timestamp  DateTime @default(now())
+
+  @@index([userId, timestamp])
+  @@index([entity, timestamp])
+}

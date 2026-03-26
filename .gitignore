@@ -1,0 +1,11 @@
+.next
+node_modules
+.env
+.env.local
+.vscode
+dist
+coverage
+*.log
+playwright-report
+test-results
+prisma/dev.db

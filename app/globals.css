@@ -1,0 +1,130 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 42 27% 96%;
+  --foreground: 221 34% 14%;
+  --card: 0 0% 100%;
+  --card-foreground: 221 34% 14%;
+  --primary: 191 77% 23%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 43 72% 90%;
+  --secondary-foreground: 193 70% 17%;
+  --muted: 42 25% 92%;
+  --muted-foreground: 219 18% 28%;
+  --accent: 32 73% 90%;
+  --accent-foreground: 21 52% 24%;
+  --destructive: 0 70% 46%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 39 19% 81%;
+  --input: 39 19% 81%;
+  --ring: 191 77% 23%;
+  --radius: 1.1rem;
+}
+
+* {
+  @apply border-border;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  position: relative;
+  min-height: 100vh;
+  font-feature-settings: "liga" 1, "calt" 1;
+  background-image:
+    radial-gradient(circle at 8% 10%, rgba(14, 116, 144, 0.06), transparent 18%),
+    radial-gradient(circle at 88% 14%, rgba(217, 119, 6, 0.08), transparent 16%),
+    radial-gradient(circle at 50% 100%, rgba(15, 118, 110, 0.06), transparent 20%),
+    linear-gradient(180deg, #f4efe5 0%, #efe8da 42%, #e9efeb 100%);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(15, 23, 42, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.015) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: radial-gradient(circle at center, black 38%, transparent 100%);
+  opacity: 0.12;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 22%, rgba(255, 255, 255, 0.48), transparent 18%),
+    radial-gradient(circle at 78% 72%, rgba(255, 255, 255, 0.24), transparent 22%),
+    linear-gradient(120deg, rgba(15, 23, 42, 0.01), transparent 28%, rgba(15, 118, 110, 0.025) 68%, rgba(217, 119, 6, 0.02));
+}
+
+::selection {
+  background: rgba(13, 148, 136, 0.18);
+  color: hsl(var(--foreground));
+}
+
+a {
+  @apply text-inherit no-underline;
+}
+
+@layer utilities {
+  .layout-shell {
+    @apply min-w-0 rounded-[2rem] border border-white/60 bg-white/80 shadow-panel backdrop-blur-sm;
+  }
+
+  .shadow-panel {
+    box-shadow:
+      0 20px 45px rgba(15, 23, 42, 0.08),
+      0 2px 8px rgba(15, 23, 42, 0.05);
+  }
+
+  .shadow-glow {
+    box-shadow:
+      0 22px 50px rgba(8, 47, 73, 0.16),
+      0 0 0 1px rgba(255, 255, 255, 0.18) inset;
+  }
+
+  .surface-card {
+    @apply min-w-0 rounded-[1.75rem] border shadow-panel;
+    border-color: rgba(255, 255, 255, 0.7);
+    background-color: rgba(255, 255, 255, 0.92);
+  }
+
+  .surface-muted {
+    @apply min-w-0 rounded-[1.5rem] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,246,240,0.92))];
+  }
+
+  .institutional-grid {
+    background-image:
+      linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  .content-safe {
+    @apply min-w-0;
+  }
+
+  .table-safe {
+    @apply min-w-0 overflow-x-auto rounded-[1.5rem] border border-slate-200/80 bg-white;
+  }
+
+  .table-safe table {
+    min-width: 100%;
+  }
+
+  .field-grid {
+    @apply grid gap-4 md:grid-cols-2 xl:grid-cols-2;
+  }
+}
