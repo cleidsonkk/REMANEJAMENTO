@@ -3,24 +3,24 @@
 @tailwind utilities;
 
 :root {
-  --background: 42 27% 96%;
-  --foreground: 221 34% 14%;
+  --background: 40 24% 96%;
+  --foreground: 216 29% 16%;
   --card: 0 0% 100%;
-  --card-foreground: 221 34% 14%;
-  --primary: 191 77% 23%;
+  --card-foreground: 216 29% 16%;
+  --primary: 194 76% 22%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 43 72% 90%;
-  --secondary-foreground: 193 70% 17%;
-  --muted: 42 25% 92%;
-  --muted-foreground: 219 18% 28%;
-  --accent: 32 73% 90%;
-  --accent-foreground: 21 52% 24%;
+  --secondary: 38 56% 90%;
+  --secondary-foreground: 194 58% 18%;
+  --muted: 40 20% 92%;
+  --muted-foreground: 216 15% 33%;
+  --accent: 38 48% 88%;
+  --accent-foreground: 24 46% 24%;
   --destructive: 0 70% 46%;
   --destructive-foreground: 0 0% 100%;
-  --border: 39 19% 81%;
-  --input: 39 19% 81%;
-  --ring: 191 77% 23%;
-  --radius: 1.1rem;
+  --border: 35 16% 82%;
+  --input: 35 16% 82%;
+  --ring: 194 76% 22%;
+  --radius: 1rem;
 }
 
 * {
@@ -36,11 +36,12 @@ body {
   position: relative;
   min-height: 100vh;
   font-feature-settings: "liga" 1, "calt" 1;
+  font-family: "Aptos", "Segoe UI", "Helvetica Neue", sans-serif;
   background-image:
-    radial-gradient(circle at 8% 10%, rgba(14, 116, 144, 0.06), transparent 18%),
-    radial-gradient(circle at 88% 14%, rgba(217, 119, 6, 0.08), transparent 16%),
-    radial-gradient(circle at 50% 100%, rgba(15, 118, 110, 0.06), transparent 20%),
-    linear-gradient(180deg, #f4efe5 0%, #efe8da 42%, #e9efeb 100%);
+    radial-gradient(circle at 10% 10%, rgba(14, 116, 144, 0.05), transparent 18%),
+    radial-gradient(circle at 88% 14%, rgba(180, 83, 9, 0.07), transparent 18%),
+    radial-gradient(circle at 50% 100%, rgba(15, 118, 110, 0.045), transparent 22%),
+    linear-gradient(180deg, #f5f1e7 0%, #f0e9dc 48%, #edf1ec 100%);
 }
 
 body::before {
@@ -54,7 +55,7 @@ body::before {
     linear-gradient(90deg, rgba(15, 23, 42, 0.015) 1px, transparent 1px);
   background-size: 36px 36px;
   mask-image: radial-gradient(circle at center, black 38%, transparent 100%);
-  opacity: 0.12;
+  opacity: 0.1;
 }
 
 body::after {
@@ -66,12 +67,20 @@ body::after {
   background:
     radial-gradient(circle at 20% 22%, rgba(255, 255, 255, 0.48), transparent 18%),
     radial-gradient(circle at 78% 72%, rgba(255, 255, 255, 0.24), transparent 22%),
-    linear-gradient(120deg, rgba(15, 23, 42, 0.01), transparent 28%, rgba(15, 118, 110, 0.025) 68%, rgba(217, 119, 6, 0.02));
+    linear-gradient(120deg, rgba(15, 23, 42, 0.015), transparent 28%, rgba(15, 118, 110, 0.02) 68%, rgba(180, 83, 9, 0.02));
 }
 
 ::selection {
   background: rgba(13, 148, 136, 0.18);
   color: hsl(var(--foreground));
+}
+
+h1,
+h2,
+h3,
+[data-display="true"] {
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  letter-spacing: -0.03em;
 }
 
 a {
@@ -80,29 +89,30 @@ a {
 
 @layer utilities {
   .layout-shell {
-    @apply min-w-0 rounded-[2rem] border border-white/60 bg-white/80 shadow-panel backdrop-blur-sm;
+    @apply min-w-0 rounded-[2rem] border border-white/70 bg-white/80 shadow-panel backdrop-blur-sm;
   }
 
   .shadow-panel {
     box-shadow:
-      0 20px 45px rgba(15, 23, 42, 0.08),
-      0 2px 8px rgba(15, 23, 42, 0.05);
+      0 22px 44px rgba(15, 23, 42, 0.08),
+      0 2px 10px rgba(15, 23, 42, 0.05);
   }
 
   .shadow-glow {
     box-shadow:
-      0 22px 50px rgba(8, 47, 73, 0.16),
-      0 0 0 1px rgba(255, 255, 255, 0.18) inset;
+      0 24px 54px rgba(10, 36, 59, 0.18),
+      0 0 0 1px rgba(255, 255, 255, 0.12) inset;
   }
 
   .surface-card {
     @apply min-w-0 rounded-[1.75rem] border shadow-panel;
-    border-color: rgba(255, 255, 255, 0.7);
-    background-color: rgba(255, 255, 255, 0.92);
+    border-color: rgba(255, 255, 255, 0.74);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 246, 240, 0.95));
   }
 
   .surface-muted {
-    @apply min-w-0 rounded-[1.5rem] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,246,240,0.92))];
+    @apply min-w-0 rounded-[1.5rem] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(248,246,240,0.92))];
   }
 
   .institutional-grid {
@@ -117,7 +127,7 @@ a {
   }
 
   .table-safe {
-    @apply min-w-0 overflow-x-auto rounded-[1.5rem] border border-slate-200/80 bg-white;
+    @apply min-w-0 overflow-x-auto rounded-[1.5rem] border border-slate-200/80 bg-white/95 shadow-panel;
   }
 
   .table-safe table {
@@ -126,5 +136,24 @@ a {
 
   .field-grid {
     @apply grid gap-4 md:grid-cols-2 xl:grid-cols-2;
+  }
+
+  .panel-dark {
+    @apply rounded-[2rem] border border-slate-950/80 text-white shadow-glow;
+    background:
+      linear-gradient(160deg, rgba(7, 20, 34, 0.99), rgba(10, 31, 52, 0.99) 52%, rgba(12, 49, 71, 0.97) 100%);
+  }
+
+  .panel-dark-soft {
+    @apply rounded-[1.5rem] border border-white/10 backdrop-blur;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+  }
+
+  .panel-light {
+    @apply rounded-[1.75rem] border border-white/70 bg-white/95 shadow-panel;
+  }
+
+  .page-section {
+    @apply space-y-6;
   }
 }

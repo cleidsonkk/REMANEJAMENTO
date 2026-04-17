@@ -3,7 +3,11 @@ import { ClipboardCheck, Fingerprint, Shield } from "lucide-react";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/services/authorization.service";
 
@@ -18,15 +22,34 @@ function getAuditVariant(action: string): "neutral" | "success" | "warning" | "d
     return "success";
   }
 
-  if (["LOGOUT"].includes(action)) {
+  if (action === "LOGOUT") {
     return "neutral";
   }
 
   return "warning";
 }
 
+function summarizeAuditPayload(oldData: unknown, newData: unknown) {
+  const source = newData ?? oldData;
+  if (!source) {
+    return "-";
+  }
+
+  if (typeof source === "string") {
+    return source.length > 140 ? `${source.slice(0, 137)}...` : source;
+  }
+
+  try {
+    const serialized = JSON.stringify(source);
+    return serialized.length > 140 ? `${serialized.slice(0, 137)}...` : serialized;
+  } catch {
+    return "Dados disponíveis no registro";
+  }
+}
+
 export default async function AuditoriaPage({ searchParams }: { searchParams: SearchParams }) {
   await requireRole("ADMIN_PLANEJAMENTO");
+
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const action = typeof params.action === "string" ? params.action.trim() : "";
@@ -52,22 +75,32 @@ export default async function AuditoriaPage({ searchParams }: { searchParams: Se
 
   const successEvents = logs.filter((item) => !item.action.includes("FAILURE")).length;
   const failureEvents = logs.filter((item) => item.action.includes("FAILURE")).length;
+  const authEvents = logs.filter((item) => item.entity === "Auth").length;
+  const responsibleUsers = new Set(logs.map((item) => item.userId).filter(Boolean)).size;
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Governança"
         title="Auditoria institucional e rastreabilidade"
-        description="Acompanhe os eventos críticos do sistema, com filtros por ação, entidade e termo livre para acelerar conferências administrativas."
+        description="Acompanhe eventos críticos do sistema com filtros objetivos, leitura administrativa clara e trilha de responsabilização por usuário, entidade e ação."
         aside={
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
               <p className="text-sm text-white/70">Eventos filtrados</p>
-              <p className="mt-2 text-3xl font-semibold">{logs.length}</p>
+              <p className="mt-2 text-3xl font-semibold text-white">{logs.length}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
               <p className="text-sm text-white/70">Falhas registradas</p>
-              <p className="mt-2 text-3xl font-semibold">{failureEvents}</p>
+              <p className="mt-2 text-3xl font-semibold text-white">{failureEvents}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
+              <p className="text-sm text-white/70">Eventos de autenticação</p>
+              <p className="mt-2 text-3xl font-semibold text-white">{authEvents}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
+              <p className="text-sm text-white/70">Usuários envolvidos</p>
+              <p className="mt-2 text-3xl font-semibold text-white">{responsibleUsers}</p>
             </div>
           </div>
         }
@@ -76,18 +109,24 @@ export default async function AuditoriaPage({ searchParams }: { searchParams: Se
       <section className="grid gap-4 md:grid-cols-3">
         <div className="rounded-[1.75rem] border bg-white/92 p-5 shadow-panel">
           <Shield className="h-5 w-5 text-primary" />
-          <p className="mt-4 text-sm font-semibold">Rastreabilidade</p>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">Eventos relevantes registrados para consulta administrativa.</p>
+          <p className="mt-4 text-sm font-semibold text-slate-950">Rastreabilidade contínua</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Eventos sensíveis permanecem disponíveis para conferência administrativa e suporte operacional.
+          </p>
         </div>
         <div className="rounded-[1.75rem] border bg-white/92 p-5 shadow-panel">
           <Fingerprint className="h-5 w-5 text-primary" />
-          <p className="mt-4 text-sm font-semibold">Responsabilização</p>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">Cada ação fica associada ao usuário ou ao processo técnico responsável.</p>
+          <p className="mt-4 text-sm font-semibold text-slate-950">Responsabilização objetiva</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Cada ação fica associada ao usuário ou ao processo técnico responsável pela alteração registrada.
+          </p>
         </div>
         <div className="rounded-[1.75rem] border bg-white/92 p-5 shadow-panel">
           <ClipboardCheck className="h-5 w-5 text-primary" />
-          <p className="mt-4 text-sm font-semibold">Conferência institucional</p>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">{successEvents} eventos operacionais concluídos no recorte atual.</p>
+          <p className="mt-4 text-sm font-semibold text-slate-950">Leitura executiva</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            {successEvents} eventos operacionais concluídos no recorte atual, com filtros rápidos para inspeção.
+          </p>
         </div>
       </section>
 
@@ -98,82 +137,121 @@ export default async function AuditoriaPage({ searchParams }: { searchParams: Se
         </CardDescription>
 
         <form className="mt-6 grid gap-4 rounded-[1.5rem] border bg-muted/35 p-4 md:grid-cols-2 xl:grid-cols-[1.2fr,0.7fr,0.7fr,auto]">
-          <div>
-            <label className="mb-2 block text-sm font-medium" htmlFor="q">
-              Buscar por usuário, ação, entidade ou ID
-            </label>
-            <input
-              className="h-11 w-full rounded-xl border bg-white px-3 text-sm"
-              defaultValue={q}
-              id="q"
-              name="q"
-              placeholder="Digite um termo administrativo"
+          <div className="space-y-2">
+            <Label htmlFor="q">Buscar por usuário, ação, entidade ou ID</Label>
+            <Input defaultValue={q} id="q" name="q" placeholder="Digite um termo administrativo" />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="action">Ação</Label>
+            <Select
+              defaultValue={action}
+              id="action"
+              name="action"
+              options={[
+                { value: "CREATE", label: "CREATE" },
+                { value: "EXECUTE", label: "EXECUTE" },
+                { value: "LOGIN_SUCCESS", label: "LOGIN_SUCCESS" },
+                { value: "LOGIN_FAILURE", label: "LOGIN_FAILURE" },
+                { value: "LOGOUT", label: "LOGOUT" },
+                { value: "RESET_PASSWORD", label: "RESET_PASSWORD" },
+              ]}
+              placeholder="Todas"
             />
           </div>
-          <div>
-            <label className="mb-2 block text-sm font-medium" htmlFor="action">
-              Ação
-            </label>
-            <select className="h-11 w-full rounded-xl border bg-white px-3 text-sm" defaultValue={action} id="action" name="action">
-              <option value="">Todas</option>
-              <option value="CREATE">CREATE</option>
-              <option value="EXECUTE">EXECUTE</option>
-              <option value="LOGIN_SUCCESS">LOGIN_SUCCESS</option>
-              <option value="LOGIN_FAILURE">LOGIN_FAILURE</option>
-              <option value="LOGOUT">LOGOUT</option>
-              <option value="RESET_PASSWORD">RESET_PASSWORD</option>
-            </select>
-          </div>
-          <div>
-            <label className="mb-2 block text-sm font-medium" htmlFor="entity">
-              Entidade
-            </label>
-            <select className="h-11 w-full rounded-xl border bg-white px-3 text-sm" defaultValue={entity} id="entity" name="entity">
-              <option value="">Todas</option>
-              <option value="Auth">Auth</option>
-              <option value="User">User</option>
-              <option value="Secretaria">Secretaria</option>
-              <option value="Remanejamento">Remanejamento</option>
-            </select>
+          <div className="space-y-2">
+            <Label htmlFor="entity">Entidade</Label>
+            <Select
+              defaultValue={entity}
+              id="entity"
+              name="entity"
+              options={[
+                { value: "Auth", label: "Auth" },
+                { value: "User", label: "User" },
+                { value: "Secretaria", label: "Secretaria" },
+                { value: "Remanejamento", label: "Remanejamento" },
+              ]}
+              placeholder="Todas"
+            />
           </div>
           <div className="flex items-end gap-3">
-            <button className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground" type="submit">
-              Aplicar
-            </button>
+            <Button className="w-full xl:w-auto" type="submit">
+              Aplicar filtros
+            </Button>
           </div>
         </form>
 
         {logs.length ? (
-          <div className="mt-6 overflow-x-auto rounded-[1.5rem] border bg-white">
-            <table className="min-w-full text-sm">
-              <thead className="bg-muted/55">
-                <tr>
-                  <th className="px-4 py-3 text-left font-semibold">Data</th>
-                  <th className="px-4 py-3 text-left font-semibold">Usuário</th>
-                  <th className="px-4 py-3 text-left font-semibold">Ação</th>
-                  <th className="px-4 py-3 text-left font-semibold">Entidade</th>
-                  <th className="px-4 py-3 text-left font-semibold">ID</th>
-                  <th className="px-4 py-3 text-left font-semibold">Resumo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map((item) => (
-                  <tr key={item.id} className="border-t align-top">
-                    <td className="px-4 py-3">{item.timestamp.toLocaleString("pt-BR")}</td>
-                    <td className="px-4 py-3">{item.user?.nome ?? "Sistema"}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant={getAuditVariant(item.action)}>{item.action}</Badge>
-                    </td>
-                    <td className="px-4 py-3">{item.entity}</td>
-                    <td className="px-4 py-3">{item.entityId ?? "-"}</td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {item.newData ? JSON.stringify(item.newData).slice(0, 120) : item.oldData ? JSON.stringify(item.oldData).slice(0, 120) : "-"}
-                    </td>
+          <>
+            <div className="mt-6 grid gap-4 xl:hidden">
+              {logs.map((item) => (
+                <article
+                  key={item.id}
+                  className="rounded-[1.5rem] border border-white/10 bg-white/95 px-5 py-4 text-slate-900 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-950">{item.user?.nome ?? "Sistema"}</p>
+                      <p className="mt-1 text-sm text-slate-600">{item.timestamp.toLocaleString("pt-BR")}</p>
+                    </div>
+                    <Badge className="shrink-0" variant={getAuditVariant(item.action)}>
+                      {item.action}
+                    </Badge>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3">
+                      <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Entidade</p>
+                      <p className="mt-2 text-sm font-medium text-slate-900">{item.entity}</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3">
+                      <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">ID relacionado</p>
+                      <p className="mt-2 break-words text-sm font-medium text-slate-900">{item.entityId ?? "-"}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3">
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Resumo</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-700">
+                      {summarizeAuditPayload(item.oldData, item.newData)}
+                    </p>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <div className="mt-6 hidden overflow-x-auto rounded-[1.5rem] border bg-white xl:block">
+              <table className="min-w-full text-sm">
+                <thead className="bg-muted/55">
+                  <tr>
+                    <th className="px-5 py-4 text-left font-semibold">Data</th>
+                    <th className="px-5 py-4 text-left font-semibold">Usuário</th>
+                    <th className="px-5 py-4 text-left font-semibold">Ação</th>
+                    <th className="px-5 py-4 text-left font-semibold">Entidade</th>
+                    <th className="px-5 py-4 text-left font-semibold">ID</th>
+                    <th className="px-5 py-4 text-left font-semibold">Resumo</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {logs.map((item) => (
+                    <tr key={item.id} className="border-t border-slate-200/80 align-top">
+                      <td className="whitespace-nowrap px-5 py-4">{item.timestamp.toLocaleString("pt-BR")}</td>
+                      <td className="px-5 py-4">{item.user?.nome ?? "Sistema"}</td>
+                      <td className="px-5 py-4">
+                        <Badge variant={getAuditVariant(item.action)}>{item.action}</Badge>
+                      </td>
+                      <td className="px-5 py-4">{item.entity}</td>
+                      <td className="px-5 py-4">
+                        <div className="max-w-[180px] break-words text-slate-700">{item.entityId ?? "-"}</div>
+                      </td>
+                      <td className="px-5 py-4 text-muted-foreground">
+                        <div className="max-w-[360px] leading-6">{summarizeAuditPayload(item.oldData, item.newData)}</div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : (
           <div className="mt-6">
             <EmptyState

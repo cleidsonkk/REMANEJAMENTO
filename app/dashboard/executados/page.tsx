@@ -27,15 +27,15 @@ export default async function ExecutadosPage({ searchParams }: { searchParams: S
     <div className="space-y-6">
       <PageHeader
         eyebrow="Histórico executivo"
-        title="Remanejamentos executados e consolidados"
-        description="Visão administrativa dos registros já efetivados, com detalhamento de secretaria, responsável, CPF, período e dados completos de adição e anulação."
+        title="Remanejamentos executados"
+        description="Consulta administrativa dos registros já efetivados, com filtros por secretaria, período, CPF e parâmetros orçamentários."
         aside={
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
+            <div className="panel-dark-soft p-4">
               <p className="text-sm text-white/70">Total filtrado</p>
               <p className="mt-2 text-3xl font-semibold text-white">{data.length}</p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
+            <div className="panel-dark-soft p-4">
               <p className="text-sm text-white/70">Modo de leitura</p>
               <p className="mt-2 text-base font-semibold text-white">Consolidado executivo</p>
             </div>
@@ -43,10 +43,10 @@ export default async function ExecutadosPage({ searchParams }: { searchParams: S
         }
       />
 
-      <Card className="min-w-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(245,247,248,0.94))]">
-        <CardTitle>Remanejamentos executados</CardTitle>
+      <Card>
+        <CardTitle>Relatórios e histórico consolidado</CardTitle>
         <CardDescription className="mt-2">
-          Filtros server-side por secretaria, período, CPF, ação, fonte e elemento, com exportação em CSV e XLSX.
+          Aplique filtros, consulte os registros executados e gere relatórios CSV ou XLSX com o recorte atual.
         </CardDescription>
         <div className="mt-6 min-w-0 space-y-6">
           <ExecutadosFilters initialValues={filters} />

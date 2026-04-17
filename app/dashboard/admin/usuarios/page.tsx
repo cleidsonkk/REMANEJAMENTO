@@ -25,6 +25,56 @@ import { listUsers } from "@/services/user.service";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
+type LinkedSecretaria = {
+  secretariaId: string;
+  secretaria: {
+    nomeSecretaria: string;
+  };
+};
+
+function renderLinkedSecretarias(links: LinkedSecretaria[], previewCount = 3) {
+  if (!links.length) {
+    return <span className="text-sm text-slate-500">Sem secretaria vinculada</span>;
+  }
+
+  const preview = links.slice(0, previewCount);
+  const remaining = links.slice(previewCount);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2">
+        {preview.map((link) => (
+          <span
+            key={link.secretariaId}
+            className="inline-flex rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs text-slate-700"
+          >
+            {link.secretaria.nomeSecretaria}
+          </span>
+        ))}
+      </div>
+
+      {remaining.length ? (
+        <details className="group">
+          <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+            <span className="group-open:hidden">Ver mais {remaining.length}</span>
+            <span className="hidden group-open:inline">Ver menos</span>
+          </summary>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {remaining.map((link) => (
+              <span
+                key={link.secretariaId}
+                className="inline-flex rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs text-slate-700"
+              >
+                {link.secretaria.nomeSecretaria}
+              </span>
+            ))}
+          </div>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
 export default async function UsuariosPage({ searchParams }: { searchParams: SearchParams }) {
   await requireRole("ADMIN_PLANEJAMENTO");
 
@@ -102,7 +152,7 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Sea
             description="Usuários de secretaria podem operar uma ou mais secretarias ativas. A secretaria padrão serve como referência institucional; a escolha operacional final acontece dentro da solicitação."
             title={editingUser ? "Editar usuário" : "Novo usuário"}
           >
-            <form action={userFormAction} className="space-y-5">
+            <form action={userFormAction} className="space-y-5" noValidate>
               {userSuccess ? (
                 <div className="rounded-2xl border border-emerald-300/30 bg-emerald-400/10 px-4 py-3 text-sm leading-6 text-emerald-100">
                   {userSuccess}
@@ -124,13 +174,26 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Sea
                   </Label>
                   <Input defaultValue={editingUser?.cpf ?? ""} id="cpf" name="cpf" required />
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-white" htmlFor="email">
-                    E-mail institucional
-                  </Label>
-                  <Input defaultValue={editingUser?.email ?? ""} id="email" name="email" required type="email" />
+                  <div className="space-y-2">
+                    <Label className="text-white" htmlFor="email">
+                      E-mail institucional
+                    </Label>
+                    <Input
+                      autoCapitalize="none"
+                      autoComplete="email"
+                      defaultValue={editingUser?.email ?? ""}
+                      id="email"
+                      inputMode="email"
+                      name="email"
+                      placeholder="usuario@prefeitura.gov.br"
+                      required
+                      type="text"
+                    />
+                    <p className="text-xs leading-5 text-slate-300">
+                      O cadastro envia o e-mail para validação no servidor, evitando travas do navegador no envio do formulário.
+                    </p>
+                  </div>
                 </div>
-              </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
@@ -150,6 +213,11 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Sea
               </div>
 
               {!editingUser ? <p className="-mt-2 text-xs leading-5 text-slate-300">{getPasswordPolicyMessage()}</p> : null}
+
+              <SectionNote>
+                Administradores do Planejamento podem ser cadastrados sem secretaria vinculada. Para criar mais de um
+                administrador, use sempre CPF e e-mail exclusivos para cada acesso institucional.
+              </SectionNote>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
@@ -363,20 +431,7 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Sea
                         </div>
                         <div className="sm:col-span-2">
                           <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Secretarias autorizadas</p>
-                          <div className="mt-1 flex flex-wrap gap-2">
-                            {item.secretariasVinculadas.length ? (
-                              item.secretariasVinculadas.map((link) => (
-                                <span
-                                  key={link.secretariaId}
-                                  className="inline-flex rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs text-slate-700"
-                                >
-                                  {link.secretaria.nomeSecretaria}
-                                </span>
-                              ))
-                            ) : (
-                              <span className="text-sm text-slate-500">Sem secretaria vinculada</span>
-                            )}
-                          </div>
+                          <div className="mt-1">{renderLinkedSecretarias(item.secretariasVinculadas)}</div>
                         </div>
                       </div>
 
@@ -427,20 +482,7 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Sea
                             </div>
                           </td>
                           <td className="px-5 py-4">
-                            <div className="flex max-w-[320px] flex-wrap gap-2">
-                              {item.secretariasVinculadas.length ? (
-                                item.secretariasVinculadas.map((link) => (
-                                  <span
-                                    key={link.secretariaId}
-                                    className="inline-flex rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs text-slate-700"
-                                  >
-                                    {link.secretaria.nomeSecretaria}
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="text-slate-500">Sem secretaria vinculada</span>
-                              )}
-                            </div>
+                            <div className="max-w-[320px]">{renderLinkedSecretarias(item.secretariasVinculadas)}</div>
                           </td>
                           <td className="whitespace-nowrap px-5 py-4">
                             <Badge className="whitespace-nowrap" variant={statusVariant[item.status]}>

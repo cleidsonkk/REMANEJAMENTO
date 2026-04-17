@@ -25,6 +25,24 @@ function redirectAdminSecretarias(params: Record<string, string>) {
 
 function getPrismaDuplicateMessage(error: unknown, fallback: string) {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+    const target = Array.isArray(error.meta?.target)
+      ? error.meta?.target.map((item) => String(item))
+      : typeof error.meta?.target === "string"
+        ? [error.meta.target]
+        : [];
+
+    if (target.includes("cpf")) {
+      return "J\u00e1 existe um usu\u00e1rio cadastrado com este CPF.";
+    }
+
+    if (target.includes("email")) {
+      return "J\u00e1 existe um usu\u00e1rio cadastrado com este e-mail.";
+    }
+
+    if (target.includes("unidadeOrcamentaria")) {
+      return "J\u00e1 existe uma secretaria com esta unidade or\u00e7ament\u00e1ria.";
+    }
+
     return fallback;
   }
 

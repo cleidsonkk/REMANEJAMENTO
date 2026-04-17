@@ -1,9 +1,10 @@
 "use client";
 
-import { Filter, RotateCcw, Save, Sheet, Table2 } from "lucide-react";
+import { FileText, Filter, RotateCcw, Save, Sheet, Table2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 type FilterValues = {
@@ -22,7 +23,7 @@ type ExecutadosFiltersProps = {
 
 const FILTER_STORAGE_KEY = "executados-filters-v1";
 
-function buildExportHref(values: FilterValues, format: "csv" | "xlsx") {
+function buildExportHref(values: FilterValues, format: "csv" | "xlsx" | "pdf") {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(values)) {
     if (value) {
@@ -61,6 +62,7 @@ export function ExecutadosFilters({ initialValues }: ExecutadosFiltersProps) {
   }, [values]);
 
   const exportCsvHref = useMemo(() => buildExportHref(values, "csv"), [values]);
+  const exportPdfHref = useMemo(() => buildExportHref(values, "pdf"), [values]);
   const exportXlsxHref = useMemo(() => buildExportHref(values, "xlsx"), [values]);
   const activeFilters = hasActiveFilters(values);
 
@@ -74,7 +76,7 @@ export function ExecutadosFilters({ initialValues }: ExecutadosFiltersProps) {
           <div>
             <p className="text-sm font-semibold">Filtros consolidados de executados</p>
             <p className="text-sm text-muted-foreground">
-              Use período, CPF e parâmetros orçamentários para localizar execuções específicas e exportar o recorte atual.
+              Use periodo, CPF e parametros orcamentarios para localizar execucoes especificas e exportar o recorte atual.
             </p>
           </div>
         </div>
@@ -86,25 +88,28 @@ export function ExecutadosFilters({ initialValues }: ExecutadosFiltersProps) {
             )}
           >
             <Save className="h-3.5 w-3.5" />
-            {loadedFromStorage ? "Filtros restaurados do navegador" : activeFilters ? "Filtros prontos para consulta" : "Sem filtros ativos"}
+            {loadedFromStorage
+              ? "Filtros restaurados do navegador"
+              : activeFilters
+                ? "Filtros prontos para consulta"
+                : "Sem filtros ativos"}
           </span>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[
-          { id: "secretaria", label: "Secretaria", placeholder: "Ex.: Finanças" },
+          { id: "secretaria", label: "Secretaria", placeholder: "Ex.: Financas" },
           { id: "cpf", label: "CPF", placeholder: "Digite o CPF do solicitante" },
-          { id: "acao", label: "Ação", placeholder: "Código ou descrição da ação" },
-          { id: "fonte", label: "Fonte", placeholder: "Fonte orçamentária" },
+          { id: "acao", label: "Acao", placeholder: "Codigo ou descricao da acao" },
+          { id: "fonte", label: "Fonte", placeholder: "Fonte orcamentaria" },
           { id: "elemento", label: "Elemento", placeholder: "Elemento de despesa" },
         ].map((field) => (
           <div key={field.id}>
             <label className="mb-2 block text-sm font-medium" htmlFor={field.id}>
               {field.label}
             </label>
-            <input
-              className="h-11 w-full rounded-xl border bg-white px-3 text-sm"
+            <Input
               id={field.id}
               name={field.id}
               placeholder={field.placeholder}
@@ -117,8 +122,7 @@ export function ExecutadosFilters({ initialValues }: ExecutadosFiltersProps) {
           <label className="mb-2 block text-sm font-medium" htmlFor="dataInicial">
             Data inicial
           </label>
-          <input
-            className="h-11 w-full rounded-xl border bg-white px-3 text-sm"
+          <Input
             id="dataInicial"
             name="dataInicial"
             type="date"
@@ -130,8 +134,7 @@ export function ExecutadosFilters({ initialValues }: ExecutadosFiltersProps) {
           <label className="mb-2 block text-sm font-medium" htmlFor="dataFinal">
             Data final
           </label>
-          <input
-            className="h-11 w-full rounded-xl border bg-white px-3 text-sm"
+          <Input
             id="dataFinal"
             name="dataFinal"
             type="date"
@@ -154,13 +157,26 @@ export function ExecutadosFilters({ initialValues }: ExecutadosFiltersProps) {
           </a>
         </div>
         <div className="flex flex-wrap gap-3">
-          <a className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border bg-white px-4 text-sm font-medium" href={exportCsvHref}>
+          <a
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border bg-white px-4 text-sm font-medium"
+            href={exportCsvHref}
+          >
             <Table2 className="h-4 w-4" />
-            Exportar CSV
+            Relatorio CSV
           </a>
-          <a className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border bg-white px-4 text-sm font-medium" href={exportXlsxHref}>
+          <a
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+            href={exportPdfHref}
+          >
+            <FileText className="h-4 w-4" />
+            Relatorio PDF
+          </a>
+          <a
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border bg-white px-4 text-sm font-medium"
+            href={exportXlsxHref}
+          >
             <Sheet className="h-4 w-4" />
-            Exportar XLSX
+            Relatorio XLSX
           </a>
         </div>
       </div>

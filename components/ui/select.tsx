@@ -14,7 +14,7 @@ export function Select({ className, options, placeholder, ...props }: SelectProp
   return (
     <select
       className={cn(
-        "flex h-11 w-full rounded-xl border border-input bg-white px-3 py-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "flex h-11 w-full rounded-xl border border-input bg-white/96 px-3 py-2 text-sm text-foreground shadow-[inset_0_1px_2px_rgba(15,23,42,0.03)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         className,
       )}
       {...props}

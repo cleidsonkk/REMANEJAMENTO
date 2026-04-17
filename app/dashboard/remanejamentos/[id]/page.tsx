@@ -14,6 +14,84 @@ import { buildRemanejamentoTimeline, getRemanejamentoGroupById } from "@/service
 import { requireSession } from "@/services/authorization.service";
 
 type Params = Promise<{ id: string }>;
+type RemanejamentoGroup = NonNullable<Awaited<ReturnType<typeof getRemanejamentoGroupById>>>;
+type RemanejamentoItem = RemanejamentoGroup["itens"][number];
+
+function RemanejamentoItemCard({ item }: { item: RemanejamentoItem }) {
+  return (
+    <Card className="border-white/70 bg-white/92">
+      <div className="flex flex-col gap-3 border-b border-slate-200/70 pb-5 md:flex-row md:items-center md:justify-between">
+        <div>
+          <CardTitle>{`Item ${String(item.loteSequencia).padStart(2, "0")} • ${item.protocolo}`}</CardTitle>
+          <CardDescription className="mt-2">
+            Dados completos da movimentação orçamentária deste item dentro do lote.
+          </CardDescription>
+        </div>
+        <Badge variant={item.status === "REALIZADO" ? "success" : item.status === "CANCELADO" ? "danger" : "warning"}>
+          {item.status}
+        </Badge>
+      </div>
+
+      <section className="mt-6 grid gap-4 xl:grid-cols-2">
+        <Card className="border-emerald-200/80 bg-emerald-50/60">
+          <CardTitle className="flex items-center gap-2 text-emerald-950">
+            <ReceiptText className="h-5 w-5" />
+            Adição
+          </CardTitle>
+          <CardDescription className="mt-2 text-emerald-900/80">
+            Dotação de destino que receberá o valor do remanejamento.
+          </CardDescription>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-emerald-200 bg-white/80 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-emerald-900/65">Ação</p>
+              <p className="mt-2 font-semibold text-emerald-950">{item.destinoAcao}</p>
+            </div>
+            <div className="rounded-2xl border border-emerald-200 bg-white/80 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-emerald-900/65">Fonte</p>
+              <p className="mt-2 font-semibold text-emerald-950">{item.destinoFonte}</p>
+            </div>
+            <div className="rounded-2xl border border-emerald-200 bg-white/80 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-emerald-900/65">Elemento</p>
+              <p className="mt-2 font-semibold text-emerald-950">{item.destinoElemento}</p>
+            </div>
+            <div className="rounded-2xl border border-emerald-200 bg-white/80 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-emerald-900/65">Valor</p>
+              <p className="mt-2 font-semibold text-emerald-950">{formatCurrency(item.destinoValor.toString())}</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="border-amber-200/80 bg-amber-50/60">
+          <CardTitle className="flex items-center gap-2 text-amber-950">
+            <ReceiptText className="h-5 w-5" />
+            Anulação
+          </CardTitle>
+          <CardDescription className="mt-2 text-amber-900/80">
+            Dotação de origem que suportará a movimentação orçamentária.
+          </CardDescription>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-amber-200 bg-white/80 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-amber-900/65">Ação</p>
+              <p className="mt-2 font-semibold text-amber-950">{item.origemAcao}</p>
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-white/80 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-amber-900/65">Fonte</p>
+              <p className="mt-2 font-semibold text-amber-950">{item.origemFonte}</p>
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-white/80 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-amber-900/65">Elemento</p>
+              <p className="mt-2 font-semibold text-amber-950">{item.origemElemento}</p>
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-white/80 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-amber-900/65">Valor</p>
+              <p className="mt-2 font-semibold text-amber-950">{formatCurrency(item.origemValor.toString())}</p>
+            </div>
+          </div>
+        </Card>
+      </section>
+    </Card>
+  );
+}
 
 export default async function RemanejamentoDetailsPage({ params }: { params: Params }) {
   const session = await requireSession();
@@ -45,6 +123,11 @@ export default async function RemanejamentoDetailsPage({ params }: { params: Par
   const isAdmin = session.user.role === "ADMIN_PLANEJAMENTO";
   const isPending = loteStatus === "PENDENTE";
   const totalLote = remanejamentoGroup.itens.reduce((sum, item) => sum + Number(item.destinoValor), 0);
+  const previewItems = remanejamentoGroup.itens.slice(0, 3);
+  const remainingItems = remanejamentoGroup.itens.slice(3);
+  const justificationPreview =
+    first.justificativa.length > 360 ? `${first.justificativa.slice(0, 360).trimEnd()}...` : first.justificativa;
+
   const timeline = buildRemanejamentoTimeline({
     loteProtocolo: remanejamentoGroup.loteProtocolo,
     status: loteStatus,
@@ -63,22 +146,20 @@ export default async function RemanejamentoDetailsPage({ params }: { params: Par
       <PageHeader
         eyebrow="Conferência"
         title={`Lote ${remanejamentoGroup.loteProtocolo}`}
-        description="Revise os dados institucionais, a justificativa, todos os itens orçamentários e a linha do tempo antes de confirmar o remanejamento."
+        description="Revise os dados institucionais, a justificativa, os itens orçamentários e a linha do tempo antes de confirmar o remanejamento."
         aside={
           <div className="space-y-3">
             <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
               <p className="text-sm text-white/70">Status atual</p>
               <div className="mt-2">
-                <Badge
-                  variant={loteStatus === "REALIZADO" ? "success" : loteStatus === "CANCELADO" ? "danger" : "warning"}
-                >
+                <Badge variant={loteStatus === "REALIZADO" ? "success" : loteStatus === "CANCELADO" ? "danger" : "warning"}>
                   {loteStatus}
                 </Badge>
               </div>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
               <p className="text-sm text-white/70">Itens no lote</p>
-              <p className="mt-2 text-base font-semibold">{remanejamentoGroup.itens.length}</p>
+              <p className="mt-2 text-base font-semibold text-white">{remanejamentoGroup.itens.length}</p>
             </div>
           </div>
         }
@@ -128,11 +209,18 @@ export default async function RemanejamentoDetailsPage({ params }: { params: Par
 
       <Card className="border-white/70 bg-white/92">
         <CardTitle>Justificativa institucional</CardTitle>
-        <CardDescription className="mt-2">
-          Fundamentação registrada pelo solicitante para o lote completo.
-        </CardDescription>
+        <CardDescription className="mt-2">Fundamentação registrada pelo solicitante para o lote completo.</CardDescription>
         <div className="mt-6 rounded-[1.5rem] border bg-muted/35 p-5 text-sm leading-7 text-muted-foreground">
-          {first.justificativa}
+          <p>{justificationPreview}</p>
+          {first.justificativa.length > 360 ? (
+            <details className="group mt-4">
+              <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+                <span className="group-open:hidden">Ver mais</span>
+                <span className="hidden group-open:inline">Ver menos</span>
+              </summary>
+              <p className="mt-4 whitespace-pre-wrap">{first.justificativa}</p>
+            </details>
+          ) : null}
         </div>
       </Card>
 
@@ -147,81 +235,29 @@ export default async function RemanejamentoDetailsPage({ params }: { params: Par
       </Card>
 
       <div className="space-y-4">
-        {remanejamentoGroup.itens.map((item) => (
-          <Card key={item.id} className="border-white/70 bg-white/92">
-            <div className="flex flex-col gap-3 border-b border-slate-200/70 pb-5 md:flex-row md:items-center md:justify-between">
-              <div>
-                <CardTitle>{`Item ${String(item.loteSequencia).padStart(2, "0")} • ${item.protocolo}`}</CardTitle>
-                <CardDescription className="mt-2">
-                  Dados completos da movimentação orçamentária deste item dentro do lote.
-                </CardDescription>
-              </div>
-              <Badge
-                variant={item.status === "REALIZADO" ? "success" : item.status === "CANCELADO" ? "danger" : "warning"}
-              >
-                {item.status}
-              </Badge>
-            </div>
-
-            <section className="mt-6 grid gap-4 xl:grid-cols-2">
-              <Card className="border-emerald-200/80 bg-emerald-50/60">
-                <CardTitle className="flex items-center gap-2 text-emerald-950">
-                  <ReceiptText className="h-5 w-5" />
-                  Adição
-                </CardTitle>
-                <CardDescription className="mt-2 text-emerald-900/80">
-                  Dotação de destino que receberá o valor do remanejamento.
-                </CardDescription>
-                <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-emerald-200 bg-white/80 p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-emerald-900/65">Ação</p>
-                    <p className="mt-2 font-semibold text-emerald-950">{item.destinoAcao}</p>
-                  </div>
-                  <div className="rounded-2xl border border-emerald-200 bg-white/80 p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-emerald-900/65">Fonte</p>
-                    <p className="mt-2 font-semibold text-emerald-950">{item.destinoFonte}</p>
-                  </div>
-                  <div className="rounded-2xl border border-emerald-200 bg-white/80 p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-emerald-900/65">Elemento</p>
-                    <p className="mt-2 font-semibold text-emerald-950">{item.destinoElemento}</p>
-                  </div>
-                  <div className="rounded-2xl border border-emerald-200 bg-white/80 p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-emerald-900/65">Valor</p>
-                    <p className="mt-2 font-semibold text-emerald-950">{formatCurrency(item.destinoValor.toString())}</p>
-                  </div>
-                </div>
-              </Card>
-
-              <Card className="border-amber-200/80 bg-amber-50/60">
-                <CardTitle className="flex items-center gap-2 text-amber-950">
-                  <ReceiptText className="h-5 w-5" />
-                  Anulação
-                </CardTitle>
-                <CardDescription className="mt-2 text-amber-900/80">
-                  Dotação de origem que suportará a movimentação orçamentária.
-                </CardDescription>
-                <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-amber-200 bg-white/80 p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-amber-900/65">Ação</p>
-                    <p className="mt-2 font-semibold text-amber-950">{item.origemAcao}</p>
-                  </div>
-                  <div className="rounded-2xl border border-amber-200 bg-white/80 p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-amber-900/65">Fonte</p>
-                    <p className="mt-2 font-semibold text-amber-950">{item.origemFonte}</p>
-                  </div>
-                  <div className="rounded-2xl border border-amber-200 bg-white/80 p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-amber-900/65">Elemento</p>
-                    <p className="mt-2 font-semibold text-amber-950">{item.origemElemento}</p>
-                  </div>
-                  <div className="rounded-2xl border border-amber-200 bg-white/80 p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-amber-900/65">Valor</p>
-                    <p className="mt-2 font-semibold text-amber-950">{formatCurrency(item.origemValor.toString())}</p>
-                  </div>
-                </div>
-              </Card>
-            </section>
-          </Card>
+        {previewItems.map((item) => (
+          <RemanejamentoItemCard key={item.id} item={item} />
         ))}
+
+        {remainingItems.length ? (
+          <Card className="border-white/70 bg-white/92">
+            <CardTitle>Itens adicionais do lote</CardTitle>
+            <CardDescription className="mt-2">
+              O lote possui mais registros além dos exibidos inicialmente para manter a leitura da tela objetiva.
+            </CardDescription>
+            <details className="group mt-6">
+              <summary className="cursor-pointer list-none text-sm font-semibold uppercase tracking-[0.18em] text-primary">
+                <span className="group-open:hidden">Ver mais {remainingItems.length} itens</span>
+                <span className="hidden group-open:inline">Ver menos</span>
+              </summary>
+              <div className="mt-4 space-y-4">
+                {remainingItems.map((item) => (
+                  <RemanejamentoItemCard key={item.id} item={item} />
+                ))}
+              </div>
+            </details>
+          </Card>
+        ) : null}
       </div>
 
       {isAdmin ? (

@@ -5,7 +5,9 @@ import type { ReactNode } from "react";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { formatCpf, formatGovernmentCode } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/services/authorization.service";
@@ -35,8 +37,42 @@ function ResultHeader({
   );
 }
 
+function ExpandableResults<T>({
+  items,
+  singularLabel,
+  pluralLabel,
+  renderItem,
+}: {
+  items: T[];
+  singularLabel: string;
+  pluralLabel: string;
+  renderItem: (item: T) => ReactNode;
+}) {
+  const preview = items.slice(0, 3);
+  const remaining = items.slice(3);
+
+  return (
+    <div className="mt-4 space-y-3">
+      {preview.map(renderItem)}
+
+      {remaining.length ? (
+        <details className="group">
+          <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+            <span className="group-open:hidden">
+              Ver mais {remaining.length} {remaining.length === 1 ? singularLabel : pluralLabel}
+            </span>
+            <span className="hidden group-open:inline">Ver menos</span>
+          </summary>
+          <div className="mt-3 space-y-3">{remaining.map(renderItem)}</div>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
 export default async function BuscaPage({ searchParams }: { searchParams: SearchParams }) {
   await requireRole("ADMIN_PLANEJAMENTO");
+
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const numericTerm = q.replace(/\D/g, "");
@@ -105,11 +141,11 @@ export default async function BuscaPage({ searchParams }: { searchParams: Search
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
               <p className="text-sm text-white/70">Resultados consolidados</p>
-              <p className="mt-2 text-3xl font-semibold">{total}</p>
+              <p className="mt-2 text-3xl font-semibold text-white">{total}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
               <p className="text-sm text-white/70">Escopo</p>
-              <p className="mt-2 text-base font-semibold">Protocolos, pessoas e secretarias</p>
+              <p className="mt-2 text-base font-semibold text-white">Protocolos, pessoas e secretarias</p>
             </div>
           </div>
         }
@@ -122,15 +158,8 @@ export default async function BuscaPage({ searchParams }: { searchParams: Search
         </CardDescription>
 
         <form className="mt-6 grid gap-3 md:grid-cols-[1fr,auto]">
-          <input
-            className="h-11 w-full rounded-xl border bg-white px-3 text-sm"
-            defaultValue={q}
-            name="q"
-            placeholder="Digite protocolo, CPF, nome, secretaria ou unidade"
-          />
-          <button className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground" type="submit">
-            Buscar
-          </button>
+          <Input defaultValue={q} name="q" placeholder="Digite protocolo, CPF, nome, secretaria ou unidade" />
+          <Button type="submit">Buscar</Button>
         </form>
       </Card>
 
@@ -148,13 +177,15 @@ export default async function BuscaPage({ searchParams }: { searchParams: Search
         <div className="grid gap-6 xl:grid-cols-2">
           <Card className="bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(245,247,248,0.94))]">
             <ResultHeader count={remanejamentos.length} icon={<FileSearch className="h-4 w-4" />} title="Solicitações" />
-            <div className="mt-4 space-y-3">
-              {remanejamentos.map((item) => (
+            <ExpandableResults
+              items={remanejamentos}
+              pluralLabel="solicitações"
+              renderItem={(item) => (
                 <div key={item.id} className="rounded-2xl border bg-white p-4 text-sm">
                   <div className="flex items-start justify-between gap-3">
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-semibold">{item.protocolo}</p>
-                      <p className="mt-1 text-muted-foreground">{item.nomeSecretaria}</p>
+                      <p className="mt-1 line-clamp-2 text-muted-foreground">{item.nomeSecretaria}</p>
                     </div>
                     <Badge variant={item.status === "REALIZADO" ? "success" : item.status === "CANCELADO" ? "danger" : "warning"}>
                       {item.status}
@@ -170,17 +201,20 @@ export default async function BuscaPage({ searchParams }: { searchParams: Search
                     </Link>
                   </div>
                 </div>
-              ))}
-            </div>
+              )}
+              singularLabel="solicitação"
+            />
           </Card>
 
           <Card className="bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(245,247,248,0.94))]">
             <ResultHeader count={executados.length} icon={<ScrollText className="h-4 w-4" />} title="Executados" />
-            <div className="mt-4 space-y-3">
-              {executados.map((item) => (
+            <ExpandableResults
+              items={executados}
+              pluralLabel="executados"
+              renderItem={(item) => (
                 <div key={item.id} className="rounded-2xl border bg-white p-4 text-sm">
                   <p className="font-semibold">{item.protocolo}</p>
-                  <p className="mt-1 text-muted-foreground">{item.secretaria}</p>
+                  <p className="mt-1 line-clamp-2 text-muted-foreground">{item.secretaria}</p>
                   <p className="mt-3 text-muted-foreground">
                     {item.nomeSolicitante} • {formatCpf(item.cpfSolicitante)}
                   </p>
@@ -191,17 +225,20 @@ export default async function BuscaPage({ searchParams }: { searchParams: Search
                     </Link>
                   </div>
                 </div>
-              ))}
-            </div>
+              )}
+              singularLabel="executado"
+            />
           </Card>
 
           <Card className="bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(245,247,248,0.94))]">
             <ResultHeader count={users.length} icon={<Users className="h-4 w-4" />} title="Usuários" />
-            <div className="mt-4 space-y-3">
-              {users.map((item) => (
+            <ExpandableResults
+              items={users}
+              pluralLabel="usuários"
+              renderItem={(item) => (
                 <div key={item.id} className="rounded-2xl border bg-white p-4 text-sm">
                   <p className="font-semibold">{item.nome}</p>
-                  <p className="mt-1 text-muted-foreground">{item.email}</p>
+                  <p className="mt-1 break-words text-muted-foreground">{item.email}</p>
                   <p className="mt-2 text-muted-foreground">
                     {formatCpf(item.cpf)} • {item.secretaria?.nomeSecretaria ?? "Sem secretaria vinculada"}
                   </p>
@@ -212,20 +249,21 @@ export default async function BuscaPage({ searchParams }: { searchParams: Search
                     </Link>
                   </div>
                 </div>
-              ))}
-            </div>
+              )}
+              singularLabel="usuário"
+            />
           </Card>
 
           <Card className="bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(245,247,248,0.94))]">
             <ResultHeader count={secretarias.length} icon={<Building2 className="h-4 w-4" />} title="Secretarias" />
-            <div className="mt-4 space-y-3">
-              {secretarias.map((item) => (
+            <ExpandableResults
+              items={secretarias}
+              pluralLabel="secretarias"
+              renderItem={(item) => (
                 <div key={item.id} className="rounded-2xl border bg-white p-4 text-sm">
                   <p className="font-semibold">{item.nomeSecretaria}</p>
-                  <p className="mt-1 text-muted-foreground">
-                    Unidade {formatGovernmentCode(item.unidadeOrcamentaria)}
-                  </p>
-                  <p className="mt-2 text-muted-foreground">{item.nomeSecretario}</p>
+                  <p className="mt-1 text-muted-foreground">Unidade {formatGovernmentCode(item.unidadeOrcamentaria)}</p>
+                  <p className="mt-2 line-clamp-2 text-muted-foreground">{item.nomeSecretario}</p>
                   <div className="mt-3">
                     <Link className="inline-flex items-center gap-2 text-sm font-medium text-primary" href="/dashboard/admin/secretarias">
                       Abrir secretarias
@@ -233,8 +271,9 @@ export default async function BuscaPage({ searchParams }: { searchParams: Search
                     </Link>
                   </div>
                 </div>
-              ))}
-            </div>
+              )}
+              singularLabel="secretaria"
+            />
           </Card>
         </div>
       )}

@@ -16,7 +16,7 @@ export function MetricCard({
   href?: string;
 }) {
   return (
-    <Card className="min-w-0 border-slate-900/70 bg-[linear-gradient(145deg,rgba(5,18,34,0.98),rgba(10,32,54,0.98)_52%,rgba(12,48,70,0.96))] text-white">
+    <Card className="panel-dark min-w-0 text-white">
       <div className="flex items-start justify-between gap-4">
         <CardDescription className="min-w-0 text-xs uppercase tracking-[0.25em] text-slate-300">{label}</CardDescription>
         {href ? (
@@ -33,7 +33,7 @@ export function MetricCard({
           </span>
         )}
       </div>
-      <CardTitle className="mt-5 break-words text-3xl text-white md:text-[2.6rem]">{value}</CardTitle>
+      <CardTitle className="mt-5 break-words text-3xl text-white md:text-[2.5rem]">{value}</CardTitle>
       <div className="mt-4 h-px bg-[linear-gradient(90deg,rgba(255,255,255,0.12),rgba(255,255,255,0.24),transparent)]" />
       <p className="mt-4 text-sm leading-6 text-slate-200">{hint}</p>
     </Card>

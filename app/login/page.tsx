@@ -6,25 +6,32 @@ import { LoginForm } from "@/features/auth/login-form";
 import { auth } from "@/lib/auth";
 
 const highlights = [
-  "Controle institucional por secretaria",
-  "Auditoria e rastreabilidade completa",
-  "Fluxo administrativo de ponta a ponta",
+  "Controle por secretaria",
+  "Rastreabilidade completa",
+  "Fluxo administrativo integrado",
 ];
 
-export default async function LoginPage() {
+type LoginSearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+export default async function LoginPage({ searchParams }: { searchParams: LoginSearchParams }) {
+  const params = await searchParams;
   const session = await auth();
   if (session?.user) {
     redirect("/dashboard");
   }
 
+  const callbackUrlParam = typeof params.callbackUrl === "string" ? params.callbackUrl : "/dashboard";
+  const callbackUrl = callbackUrlParam.startsWith("/") ? callbackUrlParam : "/dashboard";
+  const error = typeof params.error === "string" ? params.error : "";
+
   return (
     <main className="relative min-h-screen overflow-hidden px-4 py-8 lg:px-8 lg:py-10">
-      <div className="absolute inset-0 -z-20 bg-[linear-gradient(145deg,#f5f0e6_0%,#efe8da_40%,#eaf0ec_100%)]" />
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(15,118,110,0.14),transparent_20%),radial-gradient(circle_at_bottom_right,rgba(180,83,9,0.12),transparent_20%)]" />
+      <div className="absolute inset-0 -z-20 bg-[linear-gradient(145deg,#f5f0e6_0%,#efe8da_40%,#edf1ec_100%)]" />
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(15,118,110,0.12),transparent_20%),radial-gradient(circle_at_bottom_right,rgba(180,83,9,0.1),transparent_20%)]" />
       <div className="absolute inset-0 -z-10 institutional-grid opacity-15" />
 
       <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-7xl gap-6 lg:grid-cols-[minmax(0,1.05fr),minmax(420px,0.95fr)]">
-        <section className="relative min-w-0 overflow-hidden rounded-[2.35rem] border border-slate-900/85 bg-[linear-gradient(155deg,rgba(4,12,24,0.99),rgba(8,24,44,0.99)_38%,rgba(12,36,58,0.98)_70%,rgba(13,71,84,0.95))] p-6 text-white shadow-glow md:p-8 lg:p-9">
+        <section className="panel-dark relative min-w-0 overflow-hidden p-6 md:p-8 lg:p-9">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.06),transparent_22%),radial-gradient(circle_at_bottom_left,rgba(251,191,36,0.08),transparent_22%)]" />
           <div className="absolute inset-0 institutional-grid opacity-[0.08]" />
 
@@ -41,17 +48,16 @@ export default async function LoginPage() {
 
             <div className="mt-7 max-w-xl min-w-0">
               <p className="text-[11px] uppercase tracking-[0.3em] text-slate-300">Sistema da Prefeitura de Umbaúba</p>
-              <h1 className="mt-3 text-[2rem] font-semibold leading-[1.02] tracking-[-0.05em] text-white md:text-[2.9rem]">
-                Plataforma institucional para remanejamento orçamentário.
+              <h1 className="mt-3 text-[2rem] font-semibold leading-[1.02] text-white md:text-[2.9rem]" data-display="true">
+                Plataforma institucional de remanejamento orçamentário.
               </h1>
               <p className="mt-3 max-w-lg text-[13px] leading-6 text-slate-100 md:text-sm">
-                Sistema institucional desenvolvido para gerenciar solicitações de remanejamento orçamentário entre
-                secretarias, garantindo controle técnico das dotações, validação de saldo, registro de origem e destino
-                dos recursos e histórico completo de cada operação realizada.
+                Ambiente interno para registrar, conferir e acompanhar remanejamentos entre secretarias com auditoria
+                institucional e histórico executivo.
               </p>
               <p className="mt-3 max-w-lg text-[13px] leading-6 text-slate-100 md:text-sm">
-                A plataforma permite acompanhamento em tempo real, padronização dos processos administrativos e
-                segurança na execução orçamentária conforme as exigências da administração pública.
+                A plataforma foi estruturada para dar clareza ao fluxo administrativo, segurança institucional e leitura
+                consistente dos dados orçamentários.
               </p>
             </div>
 
@@ -71,31 +77,31 @@ export default async function LoginPage() {
             </div>
 
             <div className="mt-8 grid gap-3 md:grid-cols-3">
-              <div className="min-w-0 rounded-[1.35rem] border border-white/12 bg-white/8 p-4 backdrop-blur">
+              <div className="panel-dark-soft min-w-0 p-4">
                 <ShieldCheck className="h-4 w-4 text-amber-200" />
                 <h2 className="mt-3 text-base font-semibold">Acesso seguro</h2>
                 <p className="mt-2 text-[13px] leading-6 text-slate-100">
-                  Autenticação institucional e segregação por perfil.
+                  Autenticação institucional com segregação clara por perfil.
                 </p>
               </div>
-              <div className="min-w-0 rounded-[1.35rem] border border-white/12 bg-white/8 p-4 backdrop-blur">
+              <div className="panel-dark-soft min-w-0 p-4">
                 <Workflow className="h-4 w-4 text-amber-200" />
                 <h2 className="mt-3 text-base font-semibold">Fluxo completo</h2>
                 <p className="mt-2 text-[13px] leading-6 text-slate-100">
-                  Solicitação, análise, execução e histórico consolidado.
+                  Solicitação, análise, execução e histórico no mesmo ambiente.
                 </p>
               </div>
-              <div className="min-w-0 rounded-[1.35rem] border border-white/12 bg-white/8 p-4 backdrop-blur">
+              <div className="panel-dark-soft min-w-0 p-4">
                 <CheckCircle2 className="h-4 w-4 text-amber-200" />
                 <h2 className="mt-3 text-base font-semibold">Base oficial</h2>
                 <p className="mt-2 text-[13px] leading-6 text-slate-100">
-                  Dados carregados a partir da planilha institucional enviada.
+                  Secretarias e catálogos carregados da base institucional.
                 </p>
               </div>
             </div>
 
             <div className="mt-auto pt-8">
-              <div className="rounded-[1.55rem] border border-white/12 bg-white/6 p-5">
+              <div className="panel-dark-soft p-5">
                 <p className="text-[11px] uppercase tracking-[0.28em] text-slate-300">Diferenciais do ambiente</p>
                 <div className="mt-3 grid gap-2.5 md:grid-cols-3">
                   {highlights.map((item) => (
@@ -113,7 +119,7 @@ export default async function LoginPage() {
         </section>
 
         <div id="acesso" className="flex min-w-0 items-center justify-center">
-          <LoginForm />
+          <LoginForm callbackUrl={callbackUrl} error={error} />
         </div>
       </div>
     </main>

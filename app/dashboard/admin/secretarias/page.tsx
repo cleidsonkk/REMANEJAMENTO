@@ -8,6 +8,7 @@ import {
 } from "@/app/actions/admin-actions";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
+import { SectionNote } from "@/components/shared/section-note";
 import { Button } from "@/components/ui/button";
 import { FormError } from "@/components/ui/form-error";
 import { Input } from "@/components/ui/input";
@@ -21,52 +22,73 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export default async function SecretariasPage({ searchParams }: { searchParams: SearchParams }) {
   await requireRole("ADMIN_PLANEJAMENTO");
+
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const edit = typeof params.edit === "string" ? params.edit : "";
   const success = typeof params.success === "string" ? params.success : "";
   const error = typeof params.error === "string" ? params.error : "";
+
   const secretarias = await listSecretarias(false, q);
   const editingSecretaria = secretarias.find((item) => item.id === edit) ?? null;
   const secretariaFormAction = editingSecretaria
     ? updateSecretariaAction.bind(null, editingSecretaria.id)
     : createSecretariaAction;
 
+  const activeSecretarias = secretarias.filter((item) => item.statusAtivo).length;
+  const inactiveSecretarias = secretarias.length - activeSecretarias;
+  const linkedUsers = secretarias.reduce((sum, item) => sum + item._count.userLinks, 0);
+  const catalogItems = secretarias.reduce((sum, item) => sum + item._count.catalogItems, 0);
+
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Administração"
         title="Gestão institucional das secretarias"
-        description="Cadastre, edite e inative secretarias, acompanhe a base importada da planilha oficial e monitore usuários e catálogo orçamentário associados a cada órgão."
+        description="Cadastre, atualize e acompanhe a base oficial das secretarias com leitura clara de vínculos, catálogo orçamentário e status operacional."
         aside={
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
-              <p className="text-sm text-white/70">Secretarias</p>
-              <p className="mt-2 text-3xl font-semibold text-white">{secretarias.length}</p>
+              <p className="text-sm text-white/70">Secretarias ativas</p>
+              <p className="mt-2 text-3xl font-semibold text-white">{activeSecretarias}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
-              <p className="text-sm text-white/70">Base ativa</p>
-              <p className="mt-2 text-base font-semibold text-white">Catálogo institucional integrado</p>
+              <p className="text-sm text-white/70">Secretarias inativas</p>
+              <p className="mt-2 text-3xl font-semibold text-white">{inactiveSecretarias}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
+              <p className="text-sm text-white/70">Vínculos de usuários</p>
+              <p className="mt-2 text-3xl font-semibold text-white">{linkedUsers}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
+              <p className="text-sm text-white/70">Itens de catálogo</p>
+              <p className="mt-2 text-3xl font-semibold text-white">{catalogItems}</p>
             </div>
           </div>
         }
       />
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-4 lg:grid-cols-3">
         <div className="rounded-[1.75rem] border bg-white/92 p-5 shadow-panel">
           <Building2 className="h-5 w-5 text-primary" />
-          <p className="mt-4 text-sm font-semibold">Cadastro centralizado</p>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">Controle administrativo unificado por órgão.</p>
+          <p className="mt-4 text-sm font-semibold text-slate-950">Base institucional única</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            O cadastro centraliza órgão, unidade orçamentária e secretário responsável em um só fluxo.
+          </p>
         </div>
         <div className="rounded-[1.75rem] border bg-white/92 p-5 shadow-panel">
           <Users className="h-5 w-5 text-primary" />
-          <p className="mt-4 text-sm font-semibold">Múltiplos usuários por secretaria</p>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">Estrutura preparada para operação simultânea.</p>
+          <p className="mt-4 text-sm font-semibold text-slate-950">Vínculos organizados</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Cada secretaria pode sustentar múltiplos acessos sem duplicidade institucional.
+          </p>
         </div>
         <div className="rounded-[1.75rem] border bg-white/92 p-5 shadow-panel">
           <FileSpreadsheet className="h-5 w-5 text-primary" />
-          <p className="mt-4 text-sm font-semibold">Catálogo orçamentário</p>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">Itens importados e vinculados por unidade orçamentária.</p>
+          <p className="mt-4 text-sm font-semibold text-slate-950">Catálogo por unidade</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            O sistema preserva a leitura orçamentária de cada órgão com base importada oficialmente.
+          </p>
         </div>
       </section>
 
@@ -74,7 +96,7 @@ export default async function SecretariasPage({ searchParams }: { searchParams: 
         <SimpleFormCard
           className="min-w-0 self-start"
           title={editingSecretaria ? "Editar secretaria" : "Nova secretaria"}
-          description="Cadastro institucional com código interno sequencial gerado automaticamente. A mesma secretaria pode receber vários usuários ativos e manter catálogo orçamentário próprio."
+          description="Cadastro institucional com código interno sequencial gerado automaticamente e leitura preparada para operação administrativa diária."
         >
           <form action={secretariaFormAction} className="space-y-4">
             {success ? (
@@ -84,21 +106,21 @@ export default async function SecretariasPage({ searchParams }: { searchParams: 
             ) : null}
             <FormError message={error} />
 
-            <div>
+            <div className="space-y-2">
               <Label className="text-white" htmlFor="nomeSecretaria">
                 Nome da secretaria
               </Label>
               <Input defaultValue={editingSecretaria?.nomeSecretaria ?? ""} id="nomeSecretaria" name="nomeSecretaria" required />
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label className="text-white" htmlFor="sigla">
                 Sigla
               </Label>
               <Input defaultValue={editingSecretaria?.sigla ?? ""} id="sigla" name="sigla" />
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label className="text-white" htmlFor="unidadeOrcamentaria">
                 Unidade orçamentária
               </Label>
@@ -108,13 +130,12 @@ export default async function SecretariasPage({ searchParams }: { searchParams: 
                 name="unidadeOrcamentaria"
                 required
               />
-              <p className="mt-2 text-xs leading-5 text-slate-300">
-                Informe o código institucional da secretaria. O código interno sequencial é gerado automaticamente pelo
-                sistema.
+              <p className="text-xs leading-5 text-slate-300">
+                Informe o código institucional oficial. O código interno sequencial é gerado automaticamente pelo sistema.
               </p>
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label className="text-white" htmlFor="nomeSecretario">
                 Nome do secretário
               </Label>
@@ -122,13 +143,15 @@ export default async function SecretariasPage({ searchParams }: { searchParams: 
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-              <div className="flex items-center gap-3">
+              <label className="flex items-center gap-3 text-sm text-white" htmlFor="statusAtivo">
                 <input defaultChecked={editingSecretaria ? editingSecretaria.statusAtivo : true} id="statusAtivo" name="statusAtivo" type="checkbox" />
-                <Label className="mb-0 text-white" htmlFor="statusAtivo">
-                  Manter secretaria ativa para novos vínculos
-                </Label>
-              </div>
+                Manter secretaria ativa para novos vínculos
+              </label>
             </div>
+
+            <SectionNote>
+              Use a inativação apenas quando o órgão não puder mais receber novos lançamentos. Os registros históricos e os vínculos existentes permanecem auditáveis.
+            </SectionNote>
 
             <div className="flex flex-wrap gap-3">
               <Button className="w-full sm:w-auto" type="submit">
@@ -148,53 +171,33 @@ export default async function SecretariasPage({ searchParams }: { searchParams: 
         <SimpleFormCard
           className="min-w-0 self-start"
           title="Secretarias importadas"
-          description="Base institucional carregada da planilha oficial com catálogo orçamentário vinculado por unidade e ações administrativas completas."
+          description="Base institucional carregada da planilha oficial com indicadores de uso, status e catálogo vinculado."
           tone="light"
         >
-          <form className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr),auto]">
-            <Input defaultValue={q} name="q" placeholder="Buscar por secretaria, secretário ou unidade" />
-            <Button type="submit" variant="outline">
-              Buscar
-            </Button>
-          </form>
+          <div className="space-y-5">
+            <form className="grid gap-3 md:grid-cols-[minmax(0,1fr),132px]">
+              <Input defaultValue={q} name="q" placeholder="Buscar por secretaria, secretário ou unidade" />
+              <Button className="w-full" type="submit" variant="outline">
+                Buscar
+              </Button>
+            </form>
 
-          {secretarias.length ? (
-            <div className="table-safe">
-              <table className="min-w-[1040px] text-sm text-slate-900">
-                <thead className="bg-[linear-gradient(180deg,#f8fafc,#eef2f7)] text-slate-900">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-semibold">Código</th>
-                    <th className="px-4 py-3 text-left font-semibold">Secretaria</th>
-                    <th className="px-4 py-3 text-left font-semibold">Secretário</th>
-                    <th className="px-4 py-3 text-left font-semibold">Usuários</th>
-                    <th className="px-4 py-3 text-left font-semibold">Catálogo</th>
-                    <th className="px-4 py-3 text-left font-semibold">Unidade</th>
-                    <th className="px-4 py-3 text-left font-semibold">Status</th>
-                    <th className="px-4 py-3 text-left font-semibold">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
+            {secretarias.length ? (
+              <>
+                <div className="grid gap-4 xl:hidden">
                   {secretarias.map((item) => (
-                    <tr key={item.id} className="border-t border-slate-200/80 align-top text-slate-800">
-                      <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-950">
-                        {formatSequentialCode(item.codigo)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="max-w-[320px] leading-6 text-slate-900">
-                          <span className="line-clamp-2">{item.nomeSecretaria}</span>
+                    <article
+                      key={item.id}
+                      className="rounded-[1.5rem] border border-white/10 bg-white/95 px-5 py-4 text-slate-900 shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <p className="text-xs uppercase tracking-[0.22em] text-slate-500">
+                            Código {formatSequentialCode(item.codigo)}
+                          </p>
+                          <p className="mt-2 text-base font-semibold text-slate-950">{item.nomeSecretaria}</p>
+                          <p className="mt-1 text-sm text-slate-600">{item.nomeSecretario}</p>
                         </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="max-w-[220px] leading-6 text-slate-700">
-                          <span className="line-clamp-2">{item.nomeSecretario}</span>
-                        </div>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3">{item._count.userLinks}</td>
-                      <td className="whitespace-nowrap px-4 py-3">{item._count.catalogItems}</td>
-                      <td className="whitespace-nowrap px-4 py-3 text-slate-900">
-                        {formatGovernmentCode(item.unidadeOrcamentaria)}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3">
                         <span
                           className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
                             item.statusAtivo ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
@@ -202,41 +205,121 @@ export default async function SecretariasPage({ searchParams }: { searchParams: 
                         >
                           {item.statusAtivo ? "Ativa" : "Inativa"}
                         </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <Link href={`/dashboard/admin/secretarias?edit=${item.id}`}>
-                            <Button size="sm" type="button" variant="outline">
-                              <SquarePen className="mr-2 h-4 w-4" />
-                              Editar
-                            </Button>
-                          </Link>
-                          <form action={toggleSecretariaStatusAction.bind(null, item.id)}>
-                            <Button size="sm" type="submit" variant="outline">
-                              {item.statusAtivo ? "Inativar" : "Reativar"}
-                            </Button>
-                          </form>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <EmptyState
-              description="Refine a busca ou revise o cadastro institucional importado da planilha oficial."
-              title="Nenhuma secretaria encontrada"
-            />
-          )}
+                      </div>
 
-          <div className="mt-5 rounded-[1.5rem] border bg-muted/35 p-4">
-            <div className="flex items-start gap-3">
-              <Landmark className="mt-1 h-5 w-5 text-primary" />
-              <p className="text-sm leading-6 text-muted-foreground">
-                A base exibida acima alimenta o catálogo utilizado nos formulários de remanejamento por unidade
-                orçamentária.
-              </p>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3">
+                          <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Unidade</p>
+                          <p className="mt-2 text-sm font-medium text-slate-900">
+                            {formatGovernmentCode(item.unidadeOrcamentaria)}
+                          </p>
+                        </div>
+                        <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3">
+                          <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Usuários</p>
+                          <p className="mt-2 text-sm font-medium text-slate-900">{item._count.userLinks}</p>
+                        </div>
+                        <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3">
+                          <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Catálogo</p>
+                          <p className="mt-2 text-sm font-medium text-slate-900">{item._count.catalogItems}</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <Link href={`/dashboard/admin/secretarias?edit=${item.id}`}>
+                          <Button size="sm" type="button" variant="outline">
+                            <SquarePen className="mr-2 h-4 w-4" />
+                            Editar
+                          </Button>
+                        </Link>
+                        <form action={toggleSecretariaStatusAction.bind(null, item.id)}>
+                          <Button size="sm" type="submit" variant="outline">
+                            {item.statusAtivo ? "Inativar" : "Reativar"}
+                          </Button>
+                        </form>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                <div className="hidden overflow-x-auto rounded-[1.5rem] border border-white/10 bg-white/95 xl:block">
+                  <table className="min-w-[1080px] w-full text-sm text-slate-900">
+                    <thead className="bg-[linear-gradient(180deg,rgba(241,245,249,0.98),rgba(226,232,240,0.98))]">
+                      <tr>
+                        <th className="px-5 py-4 text-left font-semibold">Código</th>
+                        <th className="px-5 py-4 text-left font-semibold">Secretaria</th>
+                        <th className="px-5 py-4 text-left font-semibold">Secretário</th>
+                        <th className="px-5 py-4 text-left font-semibold">Usuários</th>
+                        <th className="px-5 py-4 text-left font-semibold">Catálogo</th>
+                        <th className="px-5 py-4 text-left font-semibold">Unidade</th>
+                        <th className="px-5 py-4 text-left font-semibold">Status</th>
+                        <th className="px-5 py-4 text-left font-semibold">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {secretarias.map((item) => (
+                        <tr key={item.id} className="border-t border-slate-200/80 align-top">
+                          <td className="whitespace-nowrap px-5 py-4 font-semibold text-slate-950">
+                            {formatSequentialCode(item.codigo)}
+                          </td>
+                          <td className="px-5 py-4">
+                            <div className="max-w-[320px] leading-6 text-slate-900">
+                              <span className="line-clamp-2">{item.nomeSecretaria}</span>
+                            </div>
+                          </td>
+                          <td className="px-5 py-4">
+                            <div className="max-w-[240px] leading-6 text-slate-700">
+                              <span className="line-clamp-2">{item.nomeSecretario}</span>
+                            </div>
+                          </td>
+                          <td className="whitespace-nowrap px-5 py-4">{item._count.userLinks}</td>
+                          <td className="whitespace-nowrap px-5 py-4">{item._count.catalogItems}</td>
+                          <td className="whitespace-nowrap px-5 py-4 text-slate-900">
+                            {formatGovernmentCode(item.unidadeOrcamentaria)}
+                          </td>
+                          <td className="whitespace-nowrap px-5 py-4">
+                            <span
+                              className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                                item.statusAtivo ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                              }`}
+                            >
+                              {item.statusAtivo ? "Ativa" : "Inativa"}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4">
+                            <div className="flex flex-wrap gap-2">
+                              <Link href={`/dashboard/admin/secretarias?edit=${item.id}`}>
+                                <Button size="sm" type="button" variant="outline">
+                                  <SquarePen className="mr-2 h-4 w-4" />
+                                  Editar
+                                </Button>
+                              </Link>
+                              <form action={toggleSecretariaStatusAction.bind(null, item.id)}>
+                                <Button size="sm" type="submit" variant="outline">
+                                  {item.statusAtivo ? "Inativar" : "Reativar"}
+                                </Button>
+                              </form>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <EmptyState
+                description="Refine a busca ou revise o cadastro institucional importado da planilha oficial."
+                title="Nenhuma secretaria encontrada"
+              />
+            )}
+
+            <div className="rounded-[1.5rem] border bg-muted/35 p-4">
+              <div className="flex items-start gap-3">
+                <Landmark className="mt-1 h-5 w-5 text-primary" />
+                <p className="text-sm leading-6 text-muted-foreground">
+                  A base exibida acima alimenta o catálogo utilizado nos formulários de remanejamento por unidade orçamentária e preserva a leitura institucional do órgão responsável.
+                </p>
+              </div>
             </div>
           </div>
         </SimpleFormCard>

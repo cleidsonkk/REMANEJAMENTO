@@ -6,6 +6,9 @@ import { StatusTimeline } from "@/components/shared/status-timeline";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { RemanejamentoForm } from "@/features/remanejamentos/remanejamento-form";
 import { prisma } from "@/lib/prisma";
 import { formatCpf, formatCurrency, formatGovernmentCode } from "@/lib/utils";
@@ -13,6 +16,27 @@ import { groupRemanejamentosByLote, listRemanejamentos } from "@/services/remane
 import { requireSession } from "@/services/authorization.service";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+type LoteGroup = ReturnType<typeof groupRemanejamentosByLote>[number];
+type LoteItem = LoteGroup["itens"][number];
+
+function LoteItemPreview({ item }: { item: LoteItem }) {
+  return (
+    <div className="rounded-2xl border border-slate-200/70 bg-slate-50/80 p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+        Item {String(item.loteSequencia).padStart(2, "0")}
+      </p>
+      <div className="mt-3 space-y-1 text-sm text-slate-900">
+        <p>
+          Adição: {item.destinoAcao} / {item.destinoFonte} / {item.destinoElemento}
+        </p>
+        <p>
+          Anulação: {item.origemAcao} / {item.origemFonte} / {item.origemElemento}
+        </p>
+        <p className="font-semibold">{formatCurrency(item.destinoValor.toString())}</p>
+      </div>
+    </div>
+  );
+}
 
 export default async function RemanejamentosPage({ searchParams }: { searchParams: SearchParams }) {
   const session = await requireSession();
@@ -100,16 +124,16 @@ export default async function RemanejamentosPage({ searchParams }: { searchParam
       <PageHeader
         eyebrow="Operação"
         title="Gestão das solicitações de remanejamento"
-        description="Acompanhe lotes e solicitações individuais, envie novos remanejamentos com catálogo por unidade orçamentária, monitore a linha do tempo operacional e execute pendências quando estiver no perfil administrativo."
+        description="Acompanhe lotes e solicitações individuais, envie novos remanejamentos com catálogo por unidade orçamentária e consulte os detalhes sem sobrecarregar a leitura da tela."
         aside={
           <div className="space-y-3">
             <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
               <p className="text-sm text-white/70">Lotes visíveis</p>
-              <p className="mt-2 text-2xl font-semibold">{filteredGroups.length}</p>
+              <p className="mt-2 text-2xl font-semibold text-white">{filteredGroups.length}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
               <p className="text-sm text-white/70">Pendências prioritárias</p>
-              <p className="mt-2 text-base font-semibold">{pendingCount} aguardando ação</p>
+              <p className="mt-2 text-base font-semibold text-white">{pendingCount} aguardando ação</p>
             </div>
           </div>
         }
@@ -126,31 +150,28 @@ export default async function RemanejamentosPage({ searchParams }: { searchParam
         </CardDescription>
 
         <form className="mt-6 grid gap-4 rounded-[1.5rem] border bg-muted/35 p-4 md:grid-cols-[1.2fr,0.6fr,auto]">
-          <div>
-            <label className="mb-2 block text-sm font-medium" htmlFor="q">
-              Buscar por protocolo, CPF, solicitante, secretaria ou item orçamentário
-            </label>
-            <input
-              className="h-11 w-full rounded-xl border bg-white px-3 text-sm"
-              defaultValue={term}
-              id="q"
-              name="q"
-              placeholder="Digite para localizar rapidamente"
+          <div className="space-y-2">
+            <Label htmlFor="q">Buscar por protocolo, CPF, solicitante, secretaria ou item orçamentário</Label>
+            <Input defaultValue={term} id="q" name="q" placeholder="Digite para localizar rapidamente" />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="status">Status</Label>
+            <Select
+              defaultValue={statusFilter}
+              id="status"
+              name="status"
+              options={[
+                { value: "PENDENTE", label: "Pendente" },
+                { value: "REALIZADO", label: "Realizado" },
+                { value: "CANCELADO", label: "Cancelado" },
+              ]}
+              placeholder="Todos"
             />
           </div>
-          <div>
-            <label className="mb-2 block text-sm font-medium" htmlFor="status">
-              Status
-            </label>
-            <select className="h-11 w-full rounded-xl border bg-white px-3 text-sm" defaultValue={statusFilter} id="status" name="status">
-              <option value="">Todos</option>
-              <option value="PENDENTE">Pendente</option>
-              <option value="REALIZADO">Realizado</option>
-              <option value="CANCELADO">Cancelado</option>
-            </select>
-          </div>
           <div className="flex items-end gap-3">
-            <Button type="submit">Aplicar</Button>
+            <Button className="w-full md:w-auto" type="submit">
+              Aplicar
+            </Button>
           </div>
         </form>
 
@@ -174,152 +195,159 @@ export default async function RemanejamentosPage({ searchParams }: { searchParam
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredGroups.map((group) => (
-                    <tr key={group.loteProtocolo} className="border-t align-top">
-                      <td className="px-4 py-3 font-medium">
-                        <div className="space-y-2">
-                          <p>{group.loteProtocolo}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {group.totalItens} {group.totalItens === 1 ? "item" : "itens"}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">{group.dataSolicitacao.toLocaleDateString("pt-BR")}</td>
-                      <td className="px-4 py-3">{group.nomeSecretaria}</td>
-                      <td className="px-4 py-3">{formatGovernmentCode(group.unidadeOrcamentaria)}</td>
-                      <td className="px-4 py-3">
-                        <div className="space-y-1">
-                          <p>{group.nomeSolicitante}</p>
-                          <p className="text-xs text-muted-foreground">{formatCpf(group.cpfSolicitante)}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="space-y-2">
-                          {group.itens.slice(0, 2).map((item) => (
-                            <div
-                              key={item.id}
-                              className="min-w-[220px] rounded-2xl border border-slate-200/70 bg-slate-50/80 p-3"
-                            >
-                              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                                Item {String(item.loteSequencia).padStart(2, "0")}
-                              </p>
-                              <div className="mt-2 space-y-1 text-sm text-slate-900">
-                                <p>
-                                  Adição: {item.destinoAcao} / {item.destinoFonte} / {item.destinoElemento}
-                                </p>
-                                <p>
-                                  Anulação: {item.origemAcao} / {item.origemFonte} / {item.origemElemento}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                          {group.totalItens > 2 ? (
-                            <p className="text-xs font-medium text-primary">+{group.totalItens - 2} itens no lote</p>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 font-semibold">{formatCurrency(group.valorTotal)}</td>
-                      <td className="px-4 py-3">
-                        <Badge
-                          variant={
-                            group.status === "REALIZADO" ? "success" : group.status === "CANCELADO" ? "danger" : "warning"
-                          }
-                        >
-                          {group.status}
-                        </Badge>
-                      </td>
-                      {session.user.role === "ADMIN_PLANEJAMENTO" ? (
-                        <td className="px-4 py-3">
-                          <Link className="block" href={`/dashboard/remanejamentos/${group.id}`}>
-                            <Button className="h-auto w-full whitespace-normal py-2 text-center leading-5" size="sm" type="button">
-                              {group.status === "PENDENTE" ? "Conferir e confirmar lote" : "Ver histórico do lote"}
-                            </Button>
-                          </Link>
+                  {filteredGroups.map((group) => {
+                    const previewItems = group.itens.slice(0, 2);
+                    const remainingItems = group.itens.slice(2);
+
+                    return (
+                      <tr key={group.loteProtocolo} className="border-t align-top">
+                        <td className="px-4 py-3 font-medium">
+                          <div className="space-y-2">
+                            <p>{group.loteProtocolo}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {group.totalItens} {group.totalItens === 1 ? "item" : "itens"}
+                            </p>
+                          </div>
                         </td>
-                      ) : null}
-                    </tr>
-                  ))}
+                        <td className="px-4 py-3">{group.dataSolicitacao.toLocaleDateString("pt-BR")}</td>
+                        <td className="px-4 py-3">{group.nomeSecretaria}</td>
+                        <td className="px-4 py-3">{formatGovernmentCode(group.unidadeOrcamentaria)}</td>
+                        <td className="px-4 py-3">
+                          <div className="space-y-1">
+                            <p>{group.nomeSolicitante}</p>
+                            <p className="text-xs text-muted-foreground">{formatCpf(group.cpfSolicitante)}</p>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="space-y-2">
+                            {previewItems.map((item) => (
+                              <LoteItemPreview key={item.id} item={item} />
+                            ))}
+
+                            {remainingItems.length ? (
+                              <details className="group">
+                                <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+                                  <span className="group-open:hidden">Ver mais {remainingItems.length} itens</span>
+                                  <span className="hidden group-open:inline">Ver menos</span>
+                                </summary>
+                                <div className="mt-2 space-y-2">
+                                  {remainingItems.map((item) => (
+                                    <LoteItemPreview key={item.id} item={item} />
+                                  ))}
+                                </div>
+                              </details>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 font-semibold">{formatCurrency(group.valorTotal)}</td>
+                        <td className="px-4 py-3">
+                          <Badge
+                            variant={
+                              group.status === "REALIZADO" ? "success" : group.status === "CANCELADO" ? "danger" : "warning"
+                            }
+                          >
+                            {group.status}
+                          </Badge>
+                        </td>
+                        {session.user.role === "ADMIN_PLANEJAMENTO" ? (
+                          <td className="px-4 py-3">
+                            <Link className="block" href={`/dashboard/remanejamentos/${group.id}`}>
+                              <Button className="h-auto w-full whitespace-normal py-2 text-center leading-5" size="sm" type="button">
+                                {group.status === "PENDENTE" ? "Conferir e confirmar lote" : "Ver histórico do lote"}
+                              </Button>
+                            </Link>
+                          </td>
+                        ) : null}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
             <div className="mt-6 grid gap-4 lg:hidden">
-              {filteredGroups.map((group) => (
-                <div key={group.loteProtocolo} className="rounded-[1.5rem] border bg-white p-5 shadow-sm">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Lote</p>
-                      <p className="mt-1 text-lg font-semibold">{group.loteProtocolo}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {group.totalItens} {group.totalItens === 1 ? "item" : "itens"}
-                      </p>
-                    </div>
-                    <Badge
-                      variant={
-                        group.status === "REALIZADO" ? "success" : group.status === "CANCELADO" ? "danger" : "warning"
-                      }
-                    >
-                      {group.status}
-                    </Badge>
-                  </div>
+              {filteredGroups.map((group) => {
+                const previewItems = group.itens.slice(0, 2);
+                const remainingItems = group.itens.slice(2);
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Secretaria</p>
-                      <p className="mt-1 text-sm">{group.nomeSecretaria}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Unidade</p>
-                      <p className="mt-1 text-sm">{formatGovernmentCode(group.unidadeOrcamentaria)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Solicitante</p>
-                      <p className="mt-1 text-sm">{group.nomeSolicitante}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Valor total</p>
-                      <p className="mt-1 text-sm font-semibold">{formatCurrency(group.valorTotal)}</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 space-y-3">
-                    {group.itens.map((item) => (
-                      <div key={item.id} className="rounded-2xl border border-slate-200/70 bg-slate-50/80 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                          Item {String(item.loteSequencia).padStart(2, "0")}
+                return (
+                  <div key={group.loteProtocolo} className="rounded-[1.5rem] border bg-white p-5 shadow-sm">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Lote</p>
+                        <p className="mt-1 text-lg font-semibold">{group.loteProtocolo}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {group.totalItens} {group.totalItens === 1 ? "item" : "itens"}
                         </p>
-                        <div className="mt-3 space-y-1 text-sm text-slate-900">
-                          <p>
-                            Adição: {item.destinoAcao} / {item.destinoFonte} / {item.destinoElemento}
-                          </p>
-                          <p>
-                            Anulação: {item.origemAcao} / {item.origemFonte} / {item.origemElemento}
-                          </p>
-                          <p className="font-semibold">{formatCurrency(item.destinoValor.toString())}</p>
-                        </div>
                       </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-4">
-                    <StatusTimeline
-                      status={group.status}
-                      createdAtLabel={group.dataSolicitacao.toLocaleDateString("pt-BR")}
-                      executedAtLabel={group.dataConclusao?.toLocaleDateString("pt-BR") ?? null}
-                    />
-                  </div>
-
-                  {session.user.role === "ADMIN_PLANEJAMENTO" ? (
-                    <div className="mt-4">
-                      <Link className="block sm:inline-block" href={`/dashboard/remanejamentos/${group.id}`}>
-                        <Button className="h-auto w-full whitespace-normal py-2 text-center leading-5 sm:w-auto" size="sm" type="button">
-                          {group.status === "PENDENTE" ? "Conferir e confirmar lote" : "Ver histórico do lote"}
-                        </Button>
-                      </Link>
+                      <Badge
+                        variant={
+                          group.status === "REALIZADO" ? "success" : group.status === "CANCELADO" ? "danger" : "warning"
+                        }
+                      >
+                        {group.status}
+                      </Badge>
                     </div>
-                  ) : null}
-                </div>
-              ))}
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Secretaria</p>
+                        <p className="mt-1 text-sm">{group.nomeSecretaria}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Unidade</p>
+                        <p className="mt-1 text-sm">{formatGovernmentCode(group.unidadeOrcamentaria)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Solicitante</p>
+                        <p className="mt-1 text-sm">{group.nomeSolicitante}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Valor total</p>
+                        <p className="mt-1 text-sm font-semibold">{formatCurrency(group.valorTotal)}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 space-y-3">
+                      {previewItems.map((item) => (
+                        <LoteItemPreview key={item.id} item={item} />
+                      ))}
+
+                      {remainingItems.length ? (
+                        <details className="group">
+                          <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+                            <span className="group-open:hidden">Ver mais {remainingItems.length} itens</span>
+                            <span className="hidden group-open:inline">Ver menos</span>
+                          </summary>
+                          <div className="mt-3 space-y-3">
+                            {remainingItems.map((item) => (
+                              <LoteItemPreview key={item.id} item={item} />
+                            ))}
+                          </div>
+                        </details>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-4">
+                      <StatusTimeline
+                        status={group.status}
+                        createdAtLabel={group.dataSolicitacao.toLocaleDateString("pt-BR")}
+                        executedAtLabel={group.dataConclusao?.toLocaleDateString("pt-BR") ?? null}
+                      />
+                    </div>
+
+                    {session.user.role === "ADMIN_PLANEJAMENTO" ? (
+                      <div className="mt-4">
+                        <Link className="block sm:inline-block" href={`/dashboard/remanejamentos/${group.id}`}>
+                          <Button className="h-auto w-full whitespace-normal py-2 text-center leading-5 sm:w-auto" size="sm" type="button">
+                            {group.status === "PENDENTE" ? "Conferir e confirmar lote" : "Ver histórico do lote"}
+                          </Button>
+                        </Link>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
           </>
         ) : (

@@ -8,6 +8,10 @@ import { prisma } from "@/lib/prisma";
 import { buildProtocol } from "@/lib/utils";
 import { remanejamentoSchema } from "@/lib/validations/remanejamento";
 import { createAuditLog } from "@/services/audit.service";
+import {
+  notifyAdminsAboutCreatedBatch,
+  notifyRequesterAboutExecutedBatch,
+} from "@/services/notification.service";
 import { markAsExecuted } from "@/services/remanejamento.service";
 
 export async function createRemanejamentoAction(formData: FormData) {
@@ -121,7 +125,17 @@ export async function createRemanejamentoAction(formData: FormData) {
     },
   });
 
+  await notifyAdminsAboutCreatedBatch({
+    loteProtocolo,
+    secretariaNome: secretaria.nomeSecretaria,
+    solicitanteNome: user.nome,
+    totalItens: created.length,
+    actorUserId: user.id,
+  });
+
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard", "layout");
+  revalidatePath("/dashboard/notificacoes");
   revalidatePath("/dashboard/remanejamentos");
   return { success: true, protocolo: loteProtocolo, totalItens: created.length };
 }
@@ -158,7 +172,19 @@ export async function executeRemanejamentoAction(id: string) {
     },
   });
 
+  if (updated.itens[0]?.solicitanteId) {
+    await notifyRequesterAboutExecutedBatch({
+      userId: updated.itens[0].solicitanteId,
+      loteProtocolo: updated.loteProtocolo,
+      secretariaNome: updated.itens[0]?.nomeSecretaria ?? "secretaria informada",
+      totalItens: updated.itens.length,
+      executorName: session.user.name ?? "Administrador",
+    });
+  }
+
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard", "layout");
+  revalidatePath("/dashboard/notificacoes");
   revalidatePath("/dashboard/remanejamentos");
   revalidatePath("/dashboard/executados");
 }

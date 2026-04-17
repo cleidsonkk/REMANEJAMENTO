@@ -11,13 +11,13 @@ export const passwordSchema = z
   .regex(/\d/, getPasswordPolicyMessage());
 
 const baseUserSchema = z.object({
-  nome: z.string().min(3, "Informe o nome"),
-  cpf: z.string().min(11, "Informe o CPF"),
-  email: z.string().email("Informe um e-mail válido"),
-  telefone: z.string().optional().or(z.literal("")),
+  nome: z.string().trim().min(3, "Informe o nome"),
+  cpf: z.string().trim().min(11, "Informe o CPF"),
+  email: z.string().trim().email("Informe um e-mail válido"),
+  telefone: z.string().trim().optional().or(z.literal("")),
   role: z.nativeEnum(UserRole),
-  secretariaId: z.string().optional().nullable(),
-  secretariaIds: z.array(z.string()).default([]),
+  secretariaId: z.string().trim().optional().nullable(),
+  secretariaIds: z.array(z.string().trim()).default([]),
   status: z.nativeEnum(UserStatus).default(UserStatus.ATIVO),
 });
 
