@@ -62,16 +62,49 @@ const PDF_COLORS = {
   success: "#0F766E",
   successSoft: "#DDF5EF",
 } as const;
+const REPORT_LOCALE = "pt-BR";
+const REPORT_TIME_ZONE = "America/Sao_Paulo";
+const REPORT_DATE_PARTS_FORMATTER = new Intl.DateTimeFormat(REPORT_LOCALE, {
+  timeZone: REPORT_TIME_ZONE,
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+});
+const REPORT_DATE_TIME_PARTS_FORMATTER = new Intl.DateTimeFormat(REPORT_LOCALE, {
+  timeZone: REPORT_TIME_ZONE,
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
 
 function formatDate(value: Date) {
-  return new Intl.DateTimeFormat("pt-BR").format(value);
+  const parts = REPORT_DATE_PARTS_FORMATTER.formatToParts(value);
+  const day = parts.find((part) => part.type === "day")?.value ?? "00";
+  const month = parts.find((part) => part.type === "month")?.value ?? "00";
+  const year = parts.find((part) => part.type === "year")?.value ?? "0000";
+
+  return `${day}/${month}/${year}`;
 }
 
 function formatDateTime(value: Date) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(value);
+  const { day, month, year, hour, minute } = getReportDateTimeParts(value);
+
+  return `${day}/${month}/${year} ${hour}:${minute}`;
+}
+
+function getReportDateTimeParts(value: Date) {
+  const parts = REPORT_DATE_TIME_PARTS_FORMATTER.formatToParts(value);
+
+  return {
+    year: parts.find((part) => part.type === "year")?.value ?? "0000",
+    month: parts.find((part) => part.type === "month")?.value ?? "00",
+    day: parts.find((part) => part.type === "day")?.value ?? "00",
+    hour: parts.find((part) => part.type === "hour")?.value ?? "00",
+    minute: parts.find((part) => part.type === "minute")?.value ?? "00",
+  };
 }
 
 function formatFilterDate(value: string) {
@@ -88,14 +121,9 @@ function formatFilterDate(value: string) {
 }
 
 function createFilenameSuffix(date = new Date()) {
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, "0"),
-    String(date.getDate()).padStart(2, "0"),
-    "-",
-    String(date.getHours()).padStart(2, "0"),
-    String(date.getMinutes()).padStart(2, "0"),
-  ].join("");
+  const { year, month, day, hour, minute } = getReportDateTimeParts(date);
+
+  return `${year}${month}${day}-${hour}${minute}`;
 }
 
 function joinCompactValues(values: string[], multiline = false) {
@@ -371,7 +399,7 @@ async function resolveLogoPath() {
 }
 
 function getPdfFontPaths() {
-  const base = path.join(process.cwd(), "node_modules", "@fontsource", "source-sans-3", "files");
+  const base = path.join(process.cwd(), "assets", "fonts");
 
   return {
     regular: path.join(base, "source-sans-3-latin-400-normal.woff"),
