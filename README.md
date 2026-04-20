@@ -13,8 +13,10 @@ Aplicação institucional da Prefeitura de Umbaúba para controle de solicitaç�
 - solicitação de remanejamento com validação de igualdade entre adição e anulação
 - fluxo administrativo para executar remanejamento e gerar registro imutavel em `RemanejamentoExecutado`
 - auditoria de eventos relevantes
+- notificacoes internas ao vivo e notificacoes externas por e-mail institucional
 - dashboard com KPIs e graficos
 - tabela paginada de executados com `TanStack Table`
+- painel administrativo de saude operacional com readiness de backup e restauracao
 
 ## Estrutura
 
@@ -39,6 +41,15 @@ npm install
 DATABASE_URL="..."
 NEXTAUTH_SECRET="..."
 NEXTAUTH_URL="https://seu-projeto.vercel.app"
+NOTIFICATION_EMAIL_ENABLED="true"
+SMTP_HOST="smtp.seu-provedor.gov.br"
+SMTP_PORT="587"
+SMTP_USER="notificacoes@umbauuba.se.gov.br"
+SMTP_PASSWORD="..."
+SMTP_FROM_EMAIL="notificacoes@umbauuba.se.gov.br"
+BACKUP_PROVIDER="Neon automatic backups"
+BACKUP_LAST_SUCCESS_AT="2026-04-20T03:00:00-03:00"
+BACKUP_LAST_RESTORE_TEST_AT="2026-04-15T09:30:00-03:00"
 SEED_ADMIN_NAME="Administrador Planejamento"
 SEED_ADMIN_EMAIL="admin@umbauuba.se.gov.br"
 SEED_ADMIN_CPF="00000000000"
@@ -72,6 +83,24 @@ prisma generate && next build
   - `DATABASE_URL`
   - `NEXTAUTH_SECRET`
   - `NEXTAUTH_URL`
+
+- variáveis recomendadas para operação real:
+  - `NOTIFICATION_EMAIL_ENABLED`
+  - `SMTP_HOST`
+  - `SMTP_PORT`
+  - `SMTP_USER`
+  - `SMTP_PASSWORD`
+  - `SMTP_FROM_EMAIL`
+  - `SMTP_FROM_NAME`
+  - `SMTP_REPLY_TO`
+  - `NOTIFICATION_EMAIL_ADMIN_RECIPIENTS`
+  - `BACKUP_PROVIDER`
+  - `BACKUP_FREQUENCY_HOURS`
+  - `BACKUP_LAST_SUCCESS_AT`
+  - `BACKUP_LAST_RESTORE_TEST_AT`
+  - `BACKUP_OWNER_NAME`
+  - `BACKUP_OWNER_EMAIL`
+  - `BACKUP_RUNBOOK_URL`
 
 ## Testes automatizados
 
@@ -113,6 +142,9 @@ O projeto agora possui cobertura e2e com `Playwright` para o fluxo principal:
 - catalogo por secretaria importado da planilha oficial
 - auditoria de eventos relevantes, inclusive login com sucesso e falha
 - filtros e exportacao de executados
+- healthcheck publico em `/api/health`
+- painel admin de saude operacional com status de e-mail e backup
+- notificacoes externas por e-mail para nova solicitacao e confirmacao de execucao
 - build de producao e testes automatizados basicos
 - testes ponta a ponta em navegador com Playwright para o fluxo principal
 
@@ -122,6 +154,7 @@ O projeto agora possui cobertura e2e com `Playwright` para o fluxo principal:
 - revisar politicas de senha e processo de redefinicao de acesso
 - configurar segredos fortes definitivos e ambiente de deploy oficial
 - monitorar logs de aplicacao e banco em ambiente publicado
+- manter o status de backup e o ultimo teste de restauracao atualizados nas variaveis do ambiente
 - executar testes finais de responsividade em celular, tablet e desktop
 - revisar permissao de administradores e dados iniciais antes da operacao
 

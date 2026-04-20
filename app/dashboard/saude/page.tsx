@@ -1,4 +1,5 @@
-import { Activity, Database, ShieldAlert, Siren, TimerReset } from "lucide-react";
+import Link from "next/link";
+import { Activity, Database, ExternalLink, HardDrive, Mail, ShieldAlert, Siren, TimerReset } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +31,29 @@ function getStatusLabel(status: HealthStatus) {
   return "Critico";
 }
 
+function formatOperationalDate(value: Date | null) {
+  if (!value) {
+    return "Nao informado";
+  }
+
+  return value.toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+  });
+}
+
+function formatFrequency(hours: number | null) {
+  if (!hours) {
+    return "Nao informado";
+  }
+
+  if (hours % 24 === 0) {
+    const days = hours / 24;
+    return `${days} ${days === 1 ? "dia" : "dias"}`;
+  }
+
+  return `${hours}h`;
+}
+
 export default async function SaudePage() {
   await requireRole("ADMIN_PLANEJAMENTO");
   const snapshot = await getSystemHealthSnapshot();
@@ -39,7 +63,7 @@ export default async function SaudePage() {
       <PageHeader
         eyebrow="Operacao"
         title="Saude operacional do sistema"
-        description="Leitura executiva de disponibilidade, ambiente, fila operacional e sinais de risco para suporte rapido."
+        description="Leitura executiva de disponibilidade, ambiente, fila operacional, notificacoes externas e prontidao de contingencia."
         aside={
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
@@ -56,7 +80,7 @@ export default async function SaudePage() {
         }
       />
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <div className="rounded-[1.75rem] border bg-white/92 p-5 shadow-panel">
           <Activity className="h-5 w-5 text-primary" />
           <p className="mt-4 text-sm font-semibold text-slate-950">Usuarios ativos</p>
@@ -77,9 +101,27 @@ export default async function SaudePage() {
           <p className="mt-4 text-sm font-semibold text-slate-950">Uptime do processo</p>
           <p className="mt-2 text-3xl font-semibold text-slate-950">{formatUptime(snapshot.uptimeSeconds)}</p>
         </div>
+        <div className="rounded-[1.75rem] border bg-white/92 p-5 shadow-panel">
+          <Mail className="h-5 w-5 text-primary" />
+          <p className="mt-4 text-sm font-semibold text-slate-950">Canal externo</p>
+          <div className="mt-3">
+            <Badge variant={getVariant(snapshot.operations.email.status)}>{getStatusLabel(snapshot.operations.email.status)}</Badge>
+          </div>
+          <p className="mt-3 text-sm leading-6 text-slate-600">{snapshot.operations.email.provider}</p>
+        </div>
+        <div className="rounded-[1.75rem] border bg-white/92 p-5 shadow-panel">
+          <HardDrive className="h-5 w-5 text-primary" />
+          <p className="mt-4 text-sm font-semibold text-slate-950">Ultimo backup</p>
+          <p className="mt-2 text-base font-semibold text-slate-950">
+            {formatOperationalDate(snapshot.operations.backup.lastSuccessAt)}
+          </p>
+          <p className="mt-3 text-sm leading-6 text-slate-600">
+            Restore validado em {formatOperationalDate(snapshot.operations.backup.lastRestoreTestAt)}
+          </p>
+        </div>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[0.95fr,1.05fr]">
+      <div className="grid gap-6 xl:grid-cols-2">
         <Card className="bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(246,244,239,0.94))]">
           <CardTitle>Ambiente atual</CardTitle>
           <CardDescription className="mt-2">
@@ -137,6 +179,118 @@ export default async function SaudePage() {
               </article>
             ))}
           </div>
+        </Card>
+
+        <Card className="bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(246,244,239,0.94))]">
+          <CardTitle>Notificacoes externas</CardTitle>
+          <CardDescription className="mt-2">
+            Status do canal de e-mail institucional usado para avisar administradores e solicitantes fora da tela do sistema.
+          </CardDescription>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Status</p>
+              <div className="mt-3">
+                <Badge variant={getVariant(snapshot.operations.email.status)}>
+                  {getStatusLabel(snapshot.operations.email.status)}
+                </Badge>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Provedor</p>
+              <p className="mt-2 text-sm font-semibold text-slate-900">{snapshot.operations.email.provider}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Remetente</p>
+              <p className="mt-2 break-words text-sm font-semibold text-slate-900">
+                {snapshot.operations.email.fromAddress ?? "Nao informado"}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Reply-to</p>
+              <p className="mt-2 break-words text-sm font-semibold text-slate-900">
+                {snapshot.operations.email.replyTo ?? "Nao informado"}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-6 rounded-[1.5rem] border bg-muted/35 p-4 text-sm leading-6 text-slate-600">
+            {snapshot.operations.email.detail}
+            {snapshot.operations.email.adminRecipientOverrides.length ? (
+              <span className="mt-2 block">
+                Destinos administrativos extras: {snapshot.operations.email.adminRecipientOverrides.join(", ")}.
+              </span>
+            ) : null}
+          </div>
+        </Card>
+
+        <Card className="bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(246,244,239,0.94))]">
+          <CardTitle>Backup e contingencia</CardTitle>
+          <CardDescription className="mt-2">
+            Leitura executiva da rotina de backup, ultimo teste de restauracao e referencia operacional para resposta a incidente.
+          </CardDescription>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Status</p>
+              <div className="mt-3">
+                <Badge variant={getVariant(snapshot.operations.backup.status)}>
+                  {getStatusLabel(snapshot.operations.backup.status)}
+                </Badge>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Provedor</p>
+              <p className="mt-2 text-sm font-semibold text-slate-900">
+                {snapshot.operations.backup.provider ?? "Nao informado"}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Frequencia prevista</p>
+              <p className="mt-2 text-sm font-semibold text-slate-900">
+                {formatFrequency(snapshot.operations.backup.frequencyHours)}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Responsavel</p>
+              <p className="mt-2 text-sm font-semibold text-slate-900">
+                {snapshot.operations.backup.ownerName ?? "Nao informado"}
+              </p>
+              <p className="mt-1 break-words text-sm text-slate-600">
+                {snapshot.operations.backup.ownerEmail ?? "Sem e-mail cadastrado"}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Ultimo backup valido</p>
+              <p className="mt-2 text-sm font-semibold text-slate-900">
+                {formatOperationalDate(snapshot.operations.backup.lastSuccessAt)}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Ultimo teste de restore</p>
+              <p className="mt-2 text-sm font-semibold text-slate-900">
+                {formatOperationalDate(snapshot.operations.backup.lastRestoreTestAt)}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-6 rounded-[1.5rem] border bg-muted/35 p-4 text-sm leading-6 text-slate-600">
+            {snapshot.operations.backup.detail}
+          </div>
+
+          {snapshot.operations.backup.runbookUrl ? (
+            <div className="mt-4">
+              <Link
+                className="inline-flex items-center gap-2 text-sm font-semibold text-primary transition hover:text-primary/80"
+                href={snapshot.operations.backup.runbookUrl}
+                rel="noreferrer"
+                target="_blank"
+              >
+                Abrir runbook de contingencia
+                <ExternalLink className="h-4 w-4" />
+              </Link>
+            </div>
+          ) : null}
         </Card>
       </div>
     </div>

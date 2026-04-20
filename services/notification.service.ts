@@ -1,6 +1,8 @@
 import { Prisma, UserRole, UserStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { sendCreatedBatchEmailToAdmins, sendExecutedBatchEmailToRequester } from "@/services/email.service";
+import { getEmailDeliveryConfig } from "@/services/operational-readiness.service";
 
 export type NotificationListItem = {
   id: string;
@@ -64,31 +66,46 @@ export async function notifyAdminsAboutCreatedBatch(args: {
     },
     select: {
       id: true,
+      nome: true,
+      email: true,
     },
   });
 
-  if (!admins.length) {
+  const emailOverrides = getEmailDeliveryConfig().adminRecipientOverrides.map((email) => ({ email }));
+  const emailRecipients = [...admins.map((admin) => ({ email: admin.email, name: admin.nome })), ...emailOverrides];
+
+  if (!admins.length && !emailRecipients.length) {
     return;
   }
 
-  try {
-    await prisma.notification.createMany({
-      data: admins.map((admin) => ({
-        userId: admin.id,
-        title: "Nova solicitacao recebida",
-        message: `${args.solicitanteNome} enviou o lote ${args.loteProtocolo} pela ${args.secretariaNome} com ${args.totalItens} ${args.totalItens === 1 ? "item" : "itens"} para conferencia.`,
-        type: "REMANEJAMENTO_CREATED",
-        relatedEntity: "LoteRemanejamento",
-        relatedEntityId: args.loteProtocolo,
-      })),
-    });
-  } catch (error) {
-    if (isNotificationTableMissingError(error)) {
-      return;
+  if (admins.length) {
+    try {
+      await prisma.notification.createMany({
+        data: admins.map((admin) => ({
+          userId: admin.id,
+          title: "Nova solicitacao recebida",
+          message: `${args.solicitanteNome} enviou o lote ${args.loteProtocolo} pela ${args.secretariaNome} com ${args.totalItens} ${args.totalItens === 1 ? "item" : "itens"} para conferencia.`,
+          type: "REMANEJAMENTO_CREATED",
+          relatedEntity: "LoteRemanejamento",
+          relatedEntityId: args.loteProtocolo,
+        })),
+      });
+    } catch (error) {
+      if (isNotificationTableMissingError(error)) {
+        // Continua para permitir notificacao externa mesmo sem tabela local.
+      } else {
+        throw error;
+      }
     }
-
-    throw error;
   }
+
+  await sendCreatedBatchEmailToAdmins({
+    recipients: emailRecipients,
+    loteProtocolo: args.loteProtocolo,
+    secretariaNome: args.secretariaNome,
+    solicitanteNome: args.solicitanteNome,
+    totalItens: args.totalItens,
+  });
 }
 
 export async function notifyRequesterAboutExecutedBatch(args: {
@@ -105,6 +122,29 @@ export async function notifyRequesterAboutExecutedBatch(args: {
     type: "REMANEJAMENTO_EXECUTED",
     relatedEntity: "LoteRemanejamento",
     relatedEntityId: args.loteProtocolo,
+  });
+
+  const requester = await prisma.user.findUnique({
+    where: {
+      id: args.userId,
+    },
+    select: {
+      email: true,
+      nome: true,
+    },
+  });
+
+  await sendExecutedBatchEmailToRequester({
+    recipient: requester
+      ? {
+          email: requester.email,
+          name: requester.nome,
+        }
+      : null,
+    loteProtocolo: args.loteProtocolo,
+    secretariaNome: args.secretariaNome,
+    totalItens: args.totalItens,
+    executorName: args.executorName,
   });
 }
 

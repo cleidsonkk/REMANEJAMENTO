@@ -1,6 +1,7 @@
 import { UserStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { getBackupReadiness, getEmailDeliveryConfig } from "@/services/operational-readiness.service";
 
 export type HealthStatus = "healthy" | "degraded" | "unhealthy";
 
@@ -28,6 +29,10 @@ export type SystemHealthSnapshot = {
     failedLoginsLast24h: number;
     pendingRemanejamentos: number;
     unreadNotifications: number;
+  };
+  operations: {
+    email: ReturnType<typeof getEmailDeliveryConfig>;
+    backup: ReturnType<typeof getBackupReadiness>;
   };
 };
 
@@ -99,6 +104,8 @@ function getEnvironmentChecks() {
 export async function getSystemHealthSnapshot(): Promise<SystemHealthSnapshot> {
   const startedAt = Date.now();
   const environmentChecks = getEnvironmentChecks();
+  const emailReadiness = getEmailDeliveryConfig();
+  const backupReadiness = getBackupReadiness();
 
   let databaseCheck: HealthCheck = {
     key: "database",
@@ -179,7 +186,22 @@ export async function getSystemHealthSnapshot(): Promise<SystemHealthSnapshot> {
     });
   }
 
-  const checks = [...environmentChecks, databaseCheck, ...warningChecks];
+  const operationalChecks: HealthCheck[] = [
+    {
+      key: "email_delivery",
+      label: "Canal externo de notificacoes",
+      status: emailReadiness.status,
+      detail: emailReadiness.detail,
+    },
+    {
+      key: "backup_readiness",
+      label: "Backup e restauracao",
+      status: backupReadiness.status,
+      detail: backupReadiness.detail,
+    },
+  ];
+
+  const checks = [...environmentChecks, databaseCheck, ...warningChecks, ...operationalChecks];
 
   return {
     status: getOverallHealthStatus(checks),
@@ -194,6 +216,10 @@ export async function getSystemHealthSnapshot(): Promise<SystemHealthSnapshot> {
     },
     checks,
     stats,
+    operations: {
+      email: emailReadiness,
+      backup: backupReadiness,
+    },
   };
 }
 

@@ -78,6 +78,16 @@ export function formatSequentialCode(value: string | number) {
   return String(value).replace(/\D/g, "").padStart(3, "0");
 }
 
+export function getAppBaseUrl() {
+  const rawUrl = process.env.NEXTAUTH_URL ?? process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL;
+
+  if (!rawUrl) {
+    return "http://localhost:3000";
+  }
+
+  return rawUrl.startsWith("http") ? rawUrl : `https://${rawUrl}`;
+}
+
 export function getPasswordPolicyMessage() {
   return "A senha deve ter pelo menos 6 caracteres, com letras maiúsculas, minúsculas e números. Caracteres especiais também são aceitos.";
 }
