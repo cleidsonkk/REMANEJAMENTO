@@ -6,9 +6,9 @@ import { NextRequest, NextResponse } from "next/server";
 import PDFDocument from "pdfkit";
 import * as XLSX from "xlsx";
 
-import { auth } from "@/lib/auth";
 import { formatCpf, formatCurrency, formatGovernmentCode } from "@/lib/utils";
 import { listRemanejamentosExecutados } from "@/services/remanejamento.service";
+import { getCurrentAuthenticatedUser } from "@/services/authorization.service";
 
 type ExportFilters = {
   secretaria: string;
@@ -1255,8 +1255,8 @@ async function buildBrandedWorkbook(args: {
 }
 
 export async function GET(request: NextRequest) {
-  const session = await auth();
-  if (session?.user.role !== "ADMIN_PLANEJAMENTO") {
+  const user = await getCurrentAuthenticatedUser();
+  if (user?.role !== "ADMIN_PLANEJAMENTO") {
     return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
   }
 
@@ -1292,7 +1292,7 @@ export async function GET(request: NextRequest) {
     const buffer = await buildPdfReport({
       data,
       filters,
-      generatedBy: session.user.name ?? "Administrador",
+      generatedBy: user.name ?? "Administrador",
     });
 
     return new NextResponse(new Uint8Array(buffer), {
@@ -1306,7 +1306,7 @@ export async function GET(request: NextRequest) {
   const buffer = await buildBrandedWorkbook({
     data,
     filters,
-    generatedBy: session.user.name ?? "Administrador",
+    generatedBy: user.name ?? "Administrador",
   });
 
   return new NextResponse(buffer, {

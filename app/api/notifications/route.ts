@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { auth } from "@/lib/auth";
+import { getCurrentAuthenticatedUser } from "@/services/authorization.service";
 import {
   getNotificationHref,
   getNotificationSummaryForUser,
@@ -21,14 +21,14 @@ function parseLimit(value: string | null) {
 }
 
 export async function GET(request: NextRequest) {
-  const session = await auth();
+  const user = await getCurrentAuthenticatedUser();
 
-  if (!session?.user?.id) {
+  if (!user) {
     return NextResponse.json({ error: "Acesso negado." }, { status: 401 });
   }
 
   const limit = parseLimit(new URL(request.url).searchParams.get("limit"));
-  const summary = await getNotificationSummaryForUser(session.user.id, limit);
+  const summary = await getNotificationSummaryForUser(user.id, limit);
 
   return NextResponse.json({
     unreadCount: summary.unreadCount,
@@ -47,9 +47,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await auth();
+  const user = await getCurrentAuthenticatedUser();
 
-  if (!session?.user?.id) {
+  if (!user) {
     return NextResponse.json({ error: "Acesso negado." }, { status: 401 });
   }
 
@@ -64,14 +64,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Informe a notificacao." }, { status: 400 });
     }
 
-    await markNotificationAsRead(session.user.id, notificationId);
+    await markNotificationAsRead(user.id, notificationId);
   } else if (body?.action === "markAllRead") {
-    await markAllNotificationsAsRead(session.user.id);
+    await markAllNotificationsAsRead(user.id);
   } else {
     return NextResponse.json({ error: "Acao invalida." }, { status: 400 });
   }
 
-  const summary = await getNotificationSummaryForUser(session.user.id, 8);
+  const summary = await getNotificationSummaryForUser(user.id, 8);
 
   return NextResponse.json({
     unreadCount: summary.unreadCount,

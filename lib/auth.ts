@@ -5,7 +5,7 @@ import NextAuth from "next-auth";
 import { authConfig } from "@/lib/auth.config";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations/auth";
-import { logLoginFailure, logLoginSuccess } from "@/services/auth-audit.service";
+import { getClientIp, getCurrentLoginThrottle, logLoginFailure, logLoginSuccess } from "@/services/auth-audit.service";
 
 export const { auth, handlers, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -15,17 +15,31 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         cpf: {},
         password: {},
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
+        const ip = getClientIp(request);
         const parsed = loginSchema.safeParse(credentials);
         if (!parsed.success) {
           await logLoginFailure({
             cpf: String(credentials?.cpf ?? ""),
             reason: "INVALID_PAYLOAD",
+            ip,
           });
           return null;
         }
 
         const cpf = parsed.data.cpf.replace(/\D/g, "");
+        const throttle = await getCurrentLoginThrottle({ cpf, ip });
+
+        if (throttle.isBlocked) {
+          await logLoginFailure({
+            cpf,
+            reason: "RATE_LIMITED",
+            ip,
+            blockedUntil: throttle.blockedUntil,
+          });
+          return null;
+        }
+
         const user = await prisma.user.findUnique({
           where: { cpf },
           include: {
@@ -41,6 +55,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
           await logLoginFailure({
             cpf,
             reason: !user ? "USER_NOT_FOUND" : "USER_INACTIVE",
+            ip,
           });
           return null;
         }
@@ -50,6 +65,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
           await logLoginFailure({
             cpf,
             reason: "INVALID_PASSWORD",
+            ip,
           });
           return null;
         }
@@ -57,6 +73,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         await logLoginSuccess({
           userId: user.id,
           cpf,
+          ip,
         });
 
         return {

@@ -1,6 +1,7 @@
 import { type AuditLog, type Prisma, RemanejamentoStatus, type Remanejamento } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { endOfDayInTimeZone, startOfDayInTimeZone } from "@/lib/timezone";
 import { executadosFilterSchema, type ExecutadosFilterInput } from "@/lib/validations/executados";
 
 type ListedRemanejamento = Awaited<ReturnType<typeof listRemanejamentos>>[number];
@@ -110,8 +111,8 @@ export function buildExecutadosWhereClause(filters?: Partial<ExecutadosFilterInp
   const periodo =
     parsed.dataInicial || parsed.dataFinal
       ? {
-          gte: parsed.dataInicial ? new Date(`${parsed.dataInicial}T00:00:00.000Z`) : undefined,
-          lte: parsed.dataFinal ? new Date(`${parsed.dataFinal}T23:59:59.999Z`) : undefined,
+          gte: parsed.dataInicial ? startOfDayInTimeZone(parsed.dataInicial) : undefined,
+          lte: parsed.dataFinal ? endOfDayInTimeZone(parsed.dataFinal) : undefined,
         }
       : undefined;
 

@@ -6,12 +6,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getPasswordPolicyMessage } from "@/lib/utils";
 import { secretariaSchema } from "@/lib/validations/secretaria";
 import { passwordSchema, userSchema, userUpdateSchema } from "@/lib/validations/user";
 import { createAuditLog } from "@/services/audit.service";
+import { getCurrentAuthenticatedUser } from "@/services/authorization.service";
 
 function redirectAdminUsuarios(params: Record<string, string>) {
   const search = new URLSearchParams(params);
@@ -64,12 +64,12 @@ function normalizeSecretariaIds(values: FormDataEntryValue[]) {
 }
 
 async function requirePlanningAdmin() {
-  const session = await auth();
-  if (session?.user.role !== "ADMIN_PLANEJAMENTO") {
+  const user = await getCurrentAuthenticatedUser();
+  if (user?.role !== "ADMIN_PLANEJAMENTO") {
     throw new Error("Acesso negado.");
   }
 
-  return session;
+  return { user };
 }
 
 async function ensureSecretariasCanReceiveUsers(secretariaIds: string[]) {

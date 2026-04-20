@@ -3,7 +3,7 @@ import { CheckCircle2, Landmark, ShieldCheck, Workflow } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { LoginForm } from "@/features/auth/login-form";
-import { auth } from "@/lib/auth";
+import { getCurrentAuthenticatedUser } from "@/services/authorization.service";
 
 const highlights = [
   "Controle por secretaria",
@@ -15,8 +15,8 @@ type LoginSearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export default async function LoginPage({ searchParams }: { searchParams: LoginSearchParams }) {
   const params = await searchParams;
-  const session = await auth();
-  if (session?.user) {
+  const user = await getCurrentAuthenticatedUser();
+  if (user) {
     redirect("/dashboard");
   }
 

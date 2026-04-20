@@ -3,11 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buildProtocol } from "@/lib/utils";
 import { remanejamentoSchema } from "@/lib/validations/remanejamento";
 import { createAuditLog } from "@/services/audit.service";
+import { getCurrentAuthenticatedUser } from "@/services/authorization.service";
 import {
   notifyAdminsAboutCreatedBatch,
   notifyRequesterAboutExecutedBatch,
@@ -15,8 +15,8 @@ import {
 import { markAsExecuted } from "@/services/remanejamento.service";
 
 export async function createRemanejamentoAction(formData: FormData) {
-  const session = await auth();
-  if (!session?.user) {
+  const currentUser = await getCurrentAuthenticatedUser();
+  if (!currentUser) {
     throw new Error("Acesso negado.");
   }
 
@@ -40,7 +40,7 @@ export async function createRemanejamentoAction(formData: FormData) {
   }
 
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: currentUser.id },
     include: {
       secretariasVinculadas: {
         include: {
@@ -141,8 +141,8 @@ export async function createRemanejamentoAction(formData: FormData) {
 }
 
 export async function executeRemanejamentoAction(id: string) {
-  const session = await auth();
-  if (session?.user.role !== "ADMIN_PLANEJAMENTO") {
+  const currentUser = await getCurrentAuthenticatedUser();
+  if (currentUser?.role !== "ADMIN_PLANEJAMENTO") {
     throw new Error("Acesso negado.");
   }
 
@@ -150,7 +150,7 @@ export async function executeRemanejamentoAction(id: string) {
 
   for (const item of updated.itens) {
     await createAuditLog({
-      userId: session.user.id,
+      userId: currentUser.id,
       action: "EXECUTE",
       entity: "Remanejamento",
       entityId: item.id,
@@ -159,7 +159,7 @@ export async function executeRemanejamentoAction(id: string) {
   }
 
   await createAuditLog({
-    userId: session.user.id,
+    userId: currentUser.id,
     action: "EXECUTE_BATCH",
     entity: "LoteRemanejamento",
     entityId: updated.loteProtocolo,
@@ -178,7 +178,7 @@ export async function executeRemanejamentoAction(id: string) {
       loteProtocolo: updated.loteProtocolo,
       secretariaNome: updated.itens[0]?.nomeSecretaria ?? "secretaria informada",
       totalItens: updated.itens.length,
-      executorName: session.user.name ?? "Administrador",
+      executorName: currentUser.name ?? "Administrador",
     });
   }
 

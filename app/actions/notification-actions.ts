@@ -3,17 +3,17 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { auth } from "@/lib/auth";
 import { markAllNotificationsAsRead, markNotificationAsRead } from "@/services/notification.service";
+import { getCurrentAuthenticatedUser } from "@/services/authorization.service";
 
 async function requireAuthenticatedUser() {
-  const session = await auth();
+  const user = await getCurrentAuthenticatedUser();
 
-  if (!session?.user?.id) {
+  if (!user) {
     throw new Error("Acesso negado.");
   }
 
-  return session.user;
+  return user;
 }
 
 function revalidateNotificationSurfaces() {
