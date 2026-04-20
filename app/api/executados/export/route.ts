@@ -4,7 +4,6 @@ import path from "node:path";
 import ExcelJS from "exceljs";
 import { NextRequest, NextResponse } from "next/server";
 import PDFDocument from "pdfkit";
-import * as XLSX from "xlsx";
 
 import { createRequestId, logInfo, logWarn, reportServerError } from "@/lib/observability";
 import { formatCpf, formatCurrency, formatGovernmentCode } from "@/lib/utils";
@@ -33,6 +32,8 @@ type SecretariaSummaryRow = {
   ultimoRemanejamento: Date;
   loteMaisRecente: string;
 };
+
+type CompactCsvRow = ReturnType<typeof mapCsvRows>[number];
 
 const TABLE_HEADER_ROW_INDEX = 15;
 const TABLE_COLUMNS = [
@@ -186,6 +187,98 @@ function mapCsvRows(data: ExecutadoItem[]) {
       Anulação: row.anulacao,
     };
   });
+}
+
+function buildScopeLabel(summary: SummaryMetrics) {
+  return `${summary.totalRegistros} registros | ${summary.totalSecretarias} secretarias | ${summary.totalSolicitantes} solicitantes`;
+}
+
+function escapeCsvValue(value: string) {
+  const normalized = value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+  if (/[",\n;]/.test(normalized)) {
+    return `"${normalized.replace(/"/g, '""')}"`;
+  }
+
+  return normalized;
+}
+
+function buildCsvLine(values: string[]) {
+  return values.map((value) => escapeCsvValue(value)).join(";");
+}
+
+function buildCsvTable(headers: readonly string[], rows: Array<Record<string, string>>) {
+  return [
+    buildCsvLine([...headers]),
+    ...rows.map((row) => buildCsvLine(headers.map((header) => String(row[header] ?? "")))),
+  ];
+}
+
+function mapSecretariaSummaryCsvRows(data: ExecutadoItem[]) {
+  return buildSecretariaSummaryRows(data).map((item) => ({
+    Secretaria: item.secretaria,
+    "Unidade orçamentária": item.unidadeOrcamentaria,
+    Registros: String(item.registros),
+    Solicitantes: String(item.solicitantes),
+    "Total de adição": formatCurrency(item.totalAdicao),
+    "Total de anulação": formatCurrency(item.totalAnulacao),
+    "Último remanejamento": formatDate(item.ultimoRemanejamento),
+    "Lote mais recente": item.loteMaisRecente,
+  }));
+}
+
+function buildCsvContent(args: {
+  data: ExecutadoItem[];
+  filters: ExportFilters;
+  generatedBy: string;
+  generatedAt: Date;
+}) {
+  const rows = mapCsvRows(args.data);
+  const summary = getSummaryMetrics(args.data, args.filters);
+  const headers = [
+    "Lote / Protocolo",
+    "Datas",
+    "Secretaria / Unidade",
+    "Solicitante",
+    "Justificativa",
+    "Adição",
+    "Anulação",
+  ] as const;
+  const summaryHeaders = [
+    "Secretaria",
+    "Unidade orçamentária",
+    "Registros",
+    "Solicitantes",
+    "Total de adição",
+    "Total de anulação",
+    "Último remanejamento",
+    "Lote mais recente",
+  ] as const;
+
+  const lines = [
+    buildCsvLine(["PREFEITURA MUNICIPAL DE UMBAUBA"]),
+    buildCsvLine(["Relatório de Remanejamentos Executados"]),
+    buildCsvLine(["Exportação institucional compacta, pronta para leitura e impressão em folha A4."]),
+    "",
+    buildCsvLine(["Documento", "Emitido por", "Emitido em"]),
+    buildCsvLine(["Relatório compacto institucional", args.generatedBy, formatDateTime(args.generatedAt)]),
+    buildCsvLine(["Filtros aplicados", "Período considerado", "Abrangência"]),
+    buildCsvLine([buildFilterSummary(args.filters), summary.periodLabel, buildScopeLabel(summary)]),
+    buildCsvLine(["Observação", "Total de adição", "Total de anulação"]),
+    buildCsvLine([
+      "Relatório pronto para conferência administrativa, envio interno e arquivamento.",
+      formatCurrency(summary.totalAdicao),
+      formatCurrency(summary.totalAnulacao),
+    ]),
+    "",
+    buildCsvLine(["Resumo por Secretaria"]),
+    ...buildCsvTable(summaryHeaders, mapSecretariaSummaryCsvRows(args.data)),
+    "",
+    buildCsvLine(["Relatório Executado"]),
+    ...buildCsvTable(headers, rows as Array<Record<string, string>>),
+  ];
+
+  return `\uFEFF${lines.join("\r\n")}`;
 }
 
 function buildFilterSummary(filters: ExportFilters) {
@@ -437,14 +530,15 @@ function drawPdfMetricCard(
       : args.accent === "green"
         ? { bg: PDF_COLORS.successSoft, fg: PDF_COLORS.success }
         : { bg: PDF_COLORS.accentSoft, fg: PDF_COLORS.accent };
+  const valueFontSize = args.value.length > 22 ? 11.5 : args.value.length > 14 ? 13.5 : 16;
 
   doc.save();
-  doc.roundedRect(args.x, args.y, args.width, args.height, 16).fill(palette.bg);
-  doc.roundedRect(args.x + 16, args.y + 14, 8, args.height - 28, 4).fill(palette.fg);
+  doc.roundedRect(args.x, args.y, args.width, args.height, 18).fill(palette.bg);
+  doc.roundedRect(args.x + 18, args.y + 16, 8, args.height - 32, 4).fill(palette.fg);
   doc.fillColor(PDF_COLORS.muted).font(PDF_FONT_NAMES.bold).fontSize(8).text(args.label.toUpperCase(), args.x + 34, args.y + 14, {
     width: args.width - 48,
   });
-  doc.fillColor(PDF_COLORS.ink).font(PDF_FONT_NAMES.bold).fontSize(16).text(args.value, args.x + 34, args.y + 34, {
+  doc.fillColor(PDF_COLORS.ink).font(PDF_FONT_NAMES.bold).fontSize(valueFontSize).text(args.value, args.x + 34, args.y + 36, {
     width: args.width - 48,
   });
   doc.restore();
@@ -458,17 +552,78 @@ function drawPdfInfoBand(
     width: number;
     label: string;
     value: string;
+    height?: number;
+    accent?: "teal" | "gold" | "green";
   },
 ) {
+  const height = args.height ?? 56;
+  const palette =
+    args.accent === "gold"
+      ? { bg: PDF_COLORS.goldSoft, fg: PDF_COLORS.gold }
+      : args.accent === "green"
+        ? { bg: PDF_COLORS.successSoft, fg: PDF_COLORS.success }
+        : args.accent === "teal"
+          ? { bg: PDF_COLORS.accentSoft, fg: PDF_COLORS.accent }
+          : { bg: PDF_COLORS.panel, fg: PDF_COLORS.muted };
+  const valueFontSize = args.value.length > 110 ? 8.4 : args.value.length > 70 ? 9 : 9.8;
+
   doc.save();
-  doc.roundedRect(args.x, args.y, args.width, 52, 14).fill(PDF_COLORS.panel);
-  doc.fillColor(PDF_COLORS.muted).font(PDF_FONT_NAMES.bold).fontSize(8).text(args.label.toUpperCase(), args.x + 14, args.y + 12, {
+  doc.roundedRect(args.x, args.y, args.width, height, 16).fill(palette.bg);
+  doc.roundedRect(args.x + 14, args.y + 14, 6, height - 28, 3).fill(palette.fg);
+  doc.fillColor(palette.fg).font(PDF_FONT_NAMES.bold).fontSize(8).text(args.label.toUpperCase(), args.x + 30, args.y + 12, {
     width: args.width - 28,
   });
-  doc.fillColor(PDF_COLORS.ink).font(PDF_FONT_NAMES.regular).fontSize(10).text(args.value, args.x + 14, args.y + 26, {
-    width: args.width - 28,
+  doc.fillColor(PDF_COLORS.ink).font(PDF_FONT_NAMES.regular).fontSize(valueFontSize).text(args.value, args.x + 30, args.y + 28, {
+    width: args.width - 44,
   });
   doc.restore();
+}
+
+function drawPdfLabelValueStack(
+  doc: PDFKit.PDFDocument,
+  args: {
+    x: number;
+    y: number;
+    width: number;
+    label: string;
+    value: string;
+    valueFont?: "regular" | "bold";
+    valueSize?: number;
+    labelColor?: string;
+    valueColor?: string;
+  },
+) {
+  doc.fillColor(args.labelColor ?? PDF_COLORS.muted).font(PDF_FONT_NAMES.bold).fontSize(7.3).text(args.label.toUpperCase(), args.x, args.y, {
+    width: args.width,
+  });
+  doc
+    .fillColor(args.valueColor ?? PDF_COLORS.ink)
+    .font(args.valueFont === "bold" ? PDF_FONT_NAMES.bold : PDF_FONT_NAMES.regular)
+    .fontSize(args.valueSize ?? 9.4)
+    .text(args.value, args.x, args.y + 12, {
+      width: args.width,
+    });
+}
+
+function drawPdfContinuationBanner(doc: PDFKit.PDFDocument, sectionTitle: string) {
+  doc.save();
+  doc.roundedRect(PDF_MARGIN, 24, doc.page.width - PDF_MARGIN * 2, 34, 17).fill("#FCFBF8");
+  doc.roundedRect(PDF_MARGIN, 24, doc.page.width - PDF_MARGIN * 2, 34, 17).lineWidth(1).stroke("#E7E5E4");
+  doc.roundedRect(PDF_MARGIN, 24, 10, 34, 5).fill(PDF_COLORS.accent);
+  doc.fillColor(PDF_COLORS.accent).font(PDF_FONT_NAMES.bold).fontSize(8).text("RELATÓRIO INSTITUCIONAL", PDF_MARGIN + 24, 35, {
+    width: 150,
+  });
+  doc.fillColor(PDF_COLORS.ink).font(PDF_FONT_NAMES.bold).fontSize(10).text(sectionTitle, PDF_MARGIN + 188, 33, {
+    width: 220,
+  });
+  doc.fillColor(PDF_COLORS.muted).font(PDF_FONT_NAMES.regular).fontSize(8.5).text(
+    "Prefeitura Municipal de Umbaúba",
+    doc.page.width - PDF_MARGIN - 200,
+    35,
+    { width: 200, align: "right" },
+  );
+  doc.restore();
+  doc.y = 74;
 }
 
 function ensurePdfSpace(doc: PDFKit.PDFDocument, requiredHeight: number) {
@@ -498,14 +653,31 @@ function drawPdfSectionTitle(doc: PDFKit.PDFDocument, title: string, description
 
 function drawPdfSummaryTable(doc: PDFKit.PDFDocument, rows: SecretariaSummaryRow[]) {
   const columns = [
-    { key: "secretaria", label: "Secretaria", width: 180, align: "left" as const },
-    { key: "unidadeOrcamentaria", label: "Unidade", width: 60, align: "center" as const },
-    { key: "registros", label: "Regs.", width: 48, align: "center" as const },
-    { key: "solicitantes", label: "Solic.", width: 48, align: "center" as const },
-    { key: "totalAdicao", label: "Adição", width: 80, align: "right" as const },
-    { key: "totalAnulacao", label: "Anulação", width: 82, align: "right" as const },
-    { key: "ultimoRemanejamento", label: "Último", width: 62, align: "center" as const },
+    { key: "secretaria", label: "Secretaria", width: 212, align: "left" as const },
+    { key: "unidadeOrcamentaria", label: "Unidade", width: 66, align: "center" as const },
+    { key: "registros", label: "Regs.", width: 52, align: "center" as const },
+    { key: "solicitantes", label: "Solic.", width: 56, align: "center" as const },
+    { key: "totalAdicao", label: "Adição", width: 96, align: "right" as const },
+    { key: "totalAnulacao", label: "Anulação", width: 96, align: "right" as const },
+    { key: "ultimoRemanejamento", label: "Último", width: 86, align: "center" as const },
   ];
+  const totals = rows.reduce(
+    (acc, row) => ({
+      registros: acc.registros + row.registros,
+      solicitantes: acc.solicitantes + row.solicitantes,
+      totalAdicao: acc.totalAdicao + row.totalAdicao,
+      totalAnulacao: acc.totalAnulacao + row.totalAnulacao,
+      ultimoRemanejamento:
+        row.ultimoRemanejamento > acc.ultimoRemanejamento ? row.ultimoRemanejamento : acc.ultimoRemanejamento,
+    }),
+    {
+      registros: 0,
+      solicitantes: 0,
+      totalAdicao: 0,
+      totalAnulacao: 0,
+      ultimoRemanejamento: rows[0]?.ultimoRemanejamento ?? new Date(0),
+    },
+  );
 
   const drawHeader = () => {
     const top = doc.y;
@@ -525,6 +697,18 @@ function drawPdfSummaryTable(doc: PDFKit.PDFDocument, rows: SecretariaSummaryRow
     doc.y = top + 30;
   };
 
+  const startContinuationPage = () => {
+    doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
+    drawPdfPageBase(doc);
+    drawPdfContinuationBanner(doc, "Resumo por Secretaria");
+    drawPdfSectionTitle(
+      doc,
+      "Resumo por Secretaria - continuação",
+      "Consolidação executiva do volume financeiro, quantidade de registros e última referência executada por secretaria.",
+    );
+    drawHeader();
+  };
+
   drawHeader();
 
   if (!rows.length) {
@@ -539,8 +723,10 @@ function drawPdfSummaryTable(doc: PDFKit.PDFDocument, rows: SecretariaSummaryRow
     return;
   }
 
-  rows.slice(0, 12).forEach((row, index) => {
-    ensurePdfSpace(doc, 30);
+  rows.forEach((row, index) => {
+    if (doc.y + 30 > doc.page.height - PDF_MARGIN - 26) {
+      startContinuationPage();
+    }
     const top = doc.y;
     let left = PDF_MARGIN;
 
@@ -569,15 +755,37 @@ function drawPdfSummaryTable(doc: PDFKit.PDFDocument, rows: SecretariaSummaryRow
     doc.y = top + 28;
   });
 
-  if (rows.length > 12) {
-    doc.moveDown(0.4);
-    doc.fillColor(PDF_COLORS.muted).font(PDF_FONT_NAMES.italic).fontSize(9).text(
-      `Resumo apresentado com as 12 secretarias de maior volume. O detalhamento completo permanece no XLSX.`,
-      PDF_MARGIN,
-      doc.y,
-      { width: doc.page.width - PDF_MARGIN * 2 },
-    );
-    doc.moveDown(0.6);
+  if (rows.length) {
+    if (doc.y + 32 > doc.page.height - PDF_MARGIN - 26) {
+      startContinuationPage();
+    }
+
+    const top = doc.y;
+    let left = PDF_MARGIN;
+
+    doc.save();
+    doc.roundedRect(PDF_MARGIN, top, doc.page.width - PDF_MARGIN * 2, 26, 10).fill(PDF_COLORS.accentSoft);
+    doc.restore();
+
+    const values: Record<string, string> = {
+      secretaria: "TOTAL GERAL",
+      unidadeOrcamentaria: "-",
+      registros: String(totals.registros),
+      solicitantes: String(totals.solicitantes),
+      totalAdicao: formatCurrency(totals.totalAdicao),
+      totalAnulacao: formatCurrency(totals.totalAnulacao),
+      ultimoRemanejamento: totals.ultimoRemanejamento.getTime() > 0 ? formatDate(totals.ultimoRemanejamento) : "-",
+    };
+
+    for (const column of columns) {
+      doc.fillColor(PDF_COLORS.ink).font(PDF_FONT_NAMES.bold).fontSize(8.5).text(values[column.key], left + 6, top + 8, {
+        width: column.width - 12,
+        align: column.align,
+      });
+      left += column.width + 6;
+    }
+
+    doc.y = top + 34;
   }
 }
 
@@ -619,7 +827,7 @@ function drawPdfRecordsTable(doc: PDFKit.PDFDocument, items: ExecutadoItem[]) {
   const startPage = (continued: boolean) => {
     doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
     drawPdfPageBase(doc);
-    doc.y = PDF_MARGIN;
+    drawPdfContinuationBanner(doc, continued ? "Detalhamento dos registros - continuação" : "Detalhamento dos registros");
     drawPdfSectionTitle(
       doc,
       continued ? "Detalhamento completo dos registros - continuação" : "Detalhamento completo dos registros",
@@ -629,6 +837,13 @@ function drawPdfRecordsTable(doc: PDFKit.PDFDocument, items: ExecutadoItem[]) {
     );
     drawHeader();
   };
+  const totals = items.reduce(
+    (acc, item) => ({
+      totalAdicao: acc.totalAdicao + Number(item.adicaoValor),
+      totalAnulacao: acc.totalAnulacao + Number(item.anulacaoValor),
+    }),
+    { totalAdicao: 0, totalAnulacao: 0 },
+  );
 
   const measureRowHeight = (row: ReturnType<typeof buildCompactReportRow>) => {
     doc.font(PDF_FONT_NAMES.regular).fontSize(7.5);
@@ -685,16 +900,74 @@ function drawPdfRecordsTable(doc: PDFKit.PDFDocument, items: ExecutadoItem[]) {
 
     doc.y = top + rowHeight + 6;
   });
+
+  if (doc.y + 48 > doc.page.height - PDF_MARGIN - 26) {
+    startPage(true);
+  }
+
+  const summaryTop = doc.y;
+  const summaryWidth = doc.page.width - PDF_MARGIN * 2;
+  const blockGap = 12;
+  const metricWidth = Math.floor((summaryWidth - blockGap * 2 - 220) / 2);
+  const rightStart = PDF_MARGIN + summaryWidth - (metricWidth * 2 + blockGap);
+
+  doc.save();
+  doc.roundedRect(PDF_MARGIN, summaryTop, summaryWidth, 46, 16).fill("#FCFBF8");
+  doc.roundedRect(PDF_MARGIN, summaryTop, summaryWidth, 46, 16).lineWidth(1).stroke("#E7E5E4");
+  doc.roundedRect(PDF_MARGIN, summaryTop, 10, 46, 5).fill(PDF_COLORS.gold);
+  doc.restore();
+
+  doc.fillColor(PDF_COLORS.ink).font(PDF_FONT_NAMES.bold).fontSize(9.2).text("Fechamento do detalhamento", PDF_MARGIN + 22, summaryTop + 12, {
+    width: 180,
+  });
+  doc.fillColor(PDF_COLORS.muted).font(PDF_FONT_NAMES.regular).fontSize(8.5).text(
+    "Totais consolidados para conferência administrativa e arquivamento.",
+    PDF_MARGIN + 22,
+    summaryTop + 24,
+    { width: 230 },
+  );
+
+  drawPdfLabelValueStack(doc, {
+    x: rightStart,
+    y: summaryTop + 8,
+    width: 90,
+    label: "Registros",
+    value: String(items.length),
+    valueFont: "bold",
+    valueSize: 10,
+  });
+  drawPdfLabelValueStack(doc, {
+    x: rightStart + 98,
+    y: summaryTop + 8,
+    width: metricWidth,
+    label: "Total de adição",
+    value: formatCurrency(totals.totalAdicao),
+    valueFont: "bold",
+    valueSize: 10,
+  });
+  drawPdfLabelValueStack(doc, {
+    x: rightStart + 98 + metricWidth + blockGap,
+    y: summaryTop + 8,
+    width: metricWidth,
+    label: "Total de anulação",
+    value: formatCurrency(totals.totalAnulacao),
+    valueFont: "bold",
+    valueSize: 10,
+  });
+
+  doc.y = summaryTop + 58;
 }
 
 async function buildPdfReport(args: {
   data: ExecutadoItem[];
   filters: ExportFilters;
   generatedBy: string;
+  generatedAt: Date;
 }) {
-  const generatedAt = new Date();
   const summary = getSummaryMetrics(args.data, args.filters);
   const secretarias = buildSecretariaSummaryRows(args.data);
+  const reportReference = createFilenameSuffix(args.generatedAt).toUpperCase();
+  const scopeLabel = buildScopeLabel(summary);
   const logoPath = await resolveLogoPath();
   const fontPaths = getPdfFontPaths();
 
@@ -705,10 +978,10 @@ async function buildPdfReport(args: {
       bufferPages: true,
       font: fontPaths.regular,
       info: {
-        Title: "Relatório Executivo de Remanejamentos Executados",
+        Title: "Relatório de Remanejamentos Executados - Prefeitura Municipal de Umbaúba",
         Author: "Sistema de Remanejamento Orçamentário",
-        Subject: "Relatório institucional em PDF",
-        Keywords: "prefeitura, remanejamento, relatório, pdf",
+        Subject: "Relatório institucional em PDF pronto para impressão A4",
+        Keywords: "prefeitura, remanejamento, relatório, pdf, a4, executivo",
       },
     });
 
@@ -725,122 +998,227 @@ async function buildPdfReport(args: {
 
     drawPdfPageBase(doc);
 
+    const contentWidth = doc.page.width - PDF_MARGIN * 2;
+    const heroY = 34;
+    const heroHeight = 136;
+    const heroGap = 16;
+    const controlWidth = 228;
+    const heroWidth = contentWidth - controlWidth - heroGap;
+    const controlX = PDF_MARGIN + heroWidth + heroGap;
+    const textX = PDF_MARGIN + 118;
+    const textWidth = heroWidth - 142;
+
     doc.save();
-    doc.roundedRect(PDF_MARGIN, 34, doc.page.width - PDF_MARGIN * 2, 112, 24).fill("#FCFBF8");
-    doc.roundedRect(PDF_MARGIN, 34, doc.page.width - PDF_MARGIN * 2, 112, 24).lineWidth(1).stroke("#E7E5E4");
-    doc.roundedRect(PDF_MARGIN, 34, 12, 112, 6).fill(PDF_COLORS.accent);
-    doc.roundedRect(PDF_MARGIN + 16, 46, 118, 18, 9).fill(PDF_COLORS.accentSoft);
+    doc.roundedRect(PDF_MARGIN, heroY, heroWidth, heroHeight, 24).fill("#FCFBF8");
+    doc.roundedRect(PDF_MARGIN, heroY, heroWidth, heroHeight, 24).lineWidth(1).stroke("#E7E5E4");
+    doc.roundedRect(PDF_MARGIN, heroY, 12, heroHeight, 6).fill(PDF_COLORS.accent);
+    doc.roundedRect(PDF_MARGIN + 20, heroY + 16, 150, 20, 10).fill(PDF_COLORS.accentSoft);
+    doc.roundedRect(controlX, heroY, controlWidth, heroHeight, 24).fill(PDF_COLORS.panel);
+    doc.roundedRect(controlX, heroY, controlWidth, heroHeight, 24).lineWidth(1).stroke("#E7E5E4");
+    doc.roundedRect(controlX + 16, heroY + 16, controlWidth - 32, 22, 11).fill(PDF_COLORS.accentSoft);
     doc.restore();
 
     if (logoPath) {
-      doc.image(logoPath, PDF_MARGIN + 20, 58, { fit: [72, 72] });
+      doc.image(logoPath, PDF_MARGIN + 24, heroY + 28, { fit: [68, 68] });
     }
 
     doc.fillColor(PDF_COLORS.accent).font(PDF_FONT_NAMES.bold).fontSize(8.5).text(
-      "PODER EXECUTIVO MUNICIPAL",
-      148,
-      50,
+      "DOCUMENTO INSTITUCIONAL",
+      textX,
+      heroY + 22,
       { width: 180 },
     );
     doc.fillColor(PDF_COLORS.muted).font(PDF_FONT_NAMES.bold).fontSize(9).text(
       "PREFEITURA MUNICIPAL DE UMBAÚBA",
-      148,
-      68,
-      { width: 250 },
+      textX,
+      heroY + 46,
+      { width: textWidth },
     );
     doc.fillColor(PDF_COLORS.ink).font(PDF_FONT_NAMES.bold).fontSize(23).text(
-      "Relatório Executivo de Remanejamentos Executados",
-      148,
-      84,
-      { width: 268 },
+      "Relatório de Remanejamentos Executados",
+      textX,
+      heroY + 62,
+      { width: textWidth },
     );
     doc.fillColor(PDF_COLORS.muted).font(PDF_FONT_NAMES.regular).fontSize(10.2).text(
-      "Documento institucional para conferência administrativa, arquivo oficial e circulação interna controlada.",
-      148,
-      122,
-      { width: 268 },
+      "Versão executiva em PDF, organizada para conferência administrativa, impressão em A4 e arquivamento institucional.",
+      textX,
+      heroY + 100,
+      { width: textWidth },
     );
 
-    doc.save();
-    doc.roundedRect(420, 46, 136, 88, 18).fill(PDF_COLORS.panel);
-    doc.roundedRect(432, 60, 6, 58, 3).fill(PDF_COLORS.gold);
-    doc.fillColor(PDF_COLORS.muted).font(PDF_FONT_NAMES.bold).fontSize(7.6).text("DOCUMENTO", 446, 58, { width: 92 });
-    doc.fillColor(PDF_COLORS.ink).font(PDF_FONT_NAMES.bold).fontSize(10).text("RELATÓRIO OFICIAL", 446, 70, { width: 92 });
-    doc.fillColor(PDF_COLORS.muted).font(PDF_FONT_NAMES.bold).fontSize(7.6).text("EMITIDO POR", 446, 90, { width: 92 });
-    doc.fillColor(PDF_COLORS.ink).font(PDF_FONT_NAMES.bold).fontSize(9.6).text(args.generatedBy, 446, 102, { width: 92 });
-    doc.fillColor(PDF_COLORS.muted).font(PDF_FONT_NAMES.bold).fontSize(7.6).text("DATA E HORA", 446, 118, { width: 92 });
-    doc.fillColor(PDF_COLORS.ink).font(PDF_FONT_NAMES.regular).fontSize(8.8).text(formatDateTime(generatedAt), 446, 130, { width: 92 });
-    doc.restore();
+    drawPdfLabelValueStack(doc, {
+      x: textX,
+      y: heroY + 126,
+      width: 126,
+      label: "Período considerado",
+      value: summary.periodLabel,
+      valueFont: "bold",
+      valueSize: 9.2,
+    });
+    drawPdfLabelValueStack(doc, {
+      x: textX + 140,
+      y: heroY + 126,
+      width: textWidth - 140,
+      label: "Abrangência",
+      value: scopeLabel,
+      valueFont: "bold",
+      valueSize: 8.8,
+    });
+
+    doc.fillColor(PDF_COLORS.accent).font(PDF_FONT_NAMES.bold).fontSize(8.2).text("CONTROLE DO DOCUMENTO", controlX + 28, heroY + 23, {
+      width: controlWidth - 56,
+      align: "center",
+    });
+    drawPdfLabelValueStack(doc, {
+      x: controlX + 24,
+      y: heroY + 52,
+      width: controlWidth - 48,
+      label: "Documento",
+      value: "Relatório Executivo PDF A4",
+      valueFont: "bold",
+      valueSize: 9.4,
+    });
+    drawPdfLabelValueStack(doc, {
+      x: controlX + 24,
+      y: heroY + 78,
+      width: controlWidth - 48,
+      label: "Referência",
+      value: `REF. ${reportReference}`,
+      valueFont: "bold",
+      valueSize: 9.4,
+    });
+    drawPdfLabelValueStack(doc, {
+      x: controlX + 24,
+      y: heroY + 104,
+      width: controlWidth - 48,
+      label: "Emitido por",
+      value: args.generatedBy,
+      valueFont: "bold",
+      valueSize: 9,
+    });
+    drawPdfLabelValueStack(doc, {
+      x: controlX + 24,
+      y: heroY + 130,
+      width: controlWidth - 48,
+      label: "Emitido em",
+      value: formatDateTime(args.generatedAt),
+      valueSize: 8.8,
+    });
 
     doc.save();
-    doc.roundedRect(PDF_MARGIN, 154, doc.page.width - PDF_MARGIN * 2, 4, 2).fill(PDF_COLORS.accent);
-    doc.roundedRect(PDF_MARGIN, 160, 154, 3, 1.5).fill(PDF_COLORS.gold);
+    doc.roundedRect(PDF_MARGIN, 184, doc.page.width - PDF_MARGIN * 2, 4, 2).fill(PDF_COLORS.accent);
+    doc.roundedRect(PDF_MARGIN, 190, 194, 3, 1.5).fill(PDF_COLORS.gold);
     doc.restore();
+
+    doc.y = 208;
+    drawPdfSectionTitle(
+      doc,
+      "Quadro Executivo",
+      "Painel resumido para leitura gerencial imediata, com volume financeiro, abrangência e filtros do relatório.",
+    );
+
+    const metricY = doc.y;
+    const metricGap = 12;
+    const metricWidth = 181;
 
     drawPdfMetricCard(doc, {
       x: PDF_MARGIN,
-      y: 178,
-      width: 124,
+      y: metricY,
+      width: metricWidth,
       height: 78,
       label: "Total de registros",
       value: String(summary.totalRegistros),
       accent: "teal",
     });
     drawPdfMetricCard(doc, {
-      x: 176,
-      y: 178,
-      width: 124,
+      x: PDF_MARGIN + metricWidth + metricGap,
+      y: metricY,
+      width: metricWidth,
       height: 78,
       label: "Secretarias",
       value: String(summary.totalSecretarias),
       accent: "gold",
     });
     drawPdfMetricCard(doc, {
-      x: 312,
-      y: 178,
-      width: 124,
+      x: PDF_MARGIN + (metricWidth + metricGap) * 2,
+      y: metricY,
+      width: metricWidth,
       height: 78,
       label: "Solicitantes",
       value: String(summary.totalSolicitantes),
       accent: "green",
     });
     drawPdfMetricCard(doc, {
-      x: 448,
-      y: 178,
-      width: 108,
+      x: PDF_MARGIN + (metricWidth + metricGap) * 3,
+      y: metricY,
+      width: contentWidth - metricWidth * 3 - metricGap * 3,
       height: 78,
       label: "Período",
       value: summary.periodLabel,
       accent: "teal",
     });
 
+    const bandY = metricY + 94;
     drawPdfInfoBand(doc, {
       x: PDF_MARGIN,
-      y: 272,
-      width: 252,
+      y: bandY,
+      width: 320,
       label: "Filtros aplicados",
       value: buildFilterSummary(args.filters),
+      height: 60,
     });
     drawPdfInfoBand(doc, {
-      x: 306,
-      y: 272,
-      width: 126,
-      label: "Total de adição",
-      value: formatCurrency(summary.totalAdicao),
+      x: 372,
+      y: bandY,
+      width: 150,
+      label: "Período considerado",
+      value: summary.periodLabel,
+      height: 60,
+      accent: "teal",
     });
     drawPdfInfoBand(doc, {
-      x: 446,
-      y: 272,
-      width: 126,
-      label: "Total de anulação",
-      value: formatCurrency(summary.totalAnulacao),
+      x: 534,
+      y: bandY,
+      width: 268,
+      label: "Abrangência",
+      value: scopeLabel,
+      height: 60,
     });
 
-    doc.y = 350;
+    drawPdfInfoBand(doc, {
+      x: PDF_MARGIN,
+      y: bandY + 74,
+      width: 245,
+      label: "Total de adição",
+      value: formatCurrency(summary.totalAdicao),
+      height: 60,
+      accent: "gold",
+    });
+    drawPdfInfoBand(doc, {
+      x: 297,
+      y: bandY + 74,
+      width: 245,
+      label: "Total de anulação",
+      value: formatCurrency(summary.totalAnulacao),
+      height: 60,
+      accent: "green",
+    });
+    drawPdfInfoBand(doc, {
+      x: 554,
+      y: bandY + 74,
+      width: 248,
+      label: "Controle do documento",
+      value: `Ref. ${reportReference} | Emitido por ${args.generatedBy}`,
+      height: 60,
+      accent: "teal",
+    });
+
+    doc.y = bandY + 154;
     drawPdfSectionTitle(
       doc,
-      "Resumo gerencial por secretaria",
-      "Leitura executiva do volume movimentado, quantidade de registros e última referência executada.",
+      "Resumo por Secretaria",
+      "Consolidado executivo do volume movimentado, quantidade de registros e última referência executada.",
     );
     drawPdfSummaryTable(doc, secretarias);
 
@@ -850,12 +1228,17 @@ async function buildPdfReport(args: {
     for (let pageIndex = 0; pageIndex < range.count; pageIndex += 1) {
       doc.switchToPage(pageIndex);
       doc.save();
+      doc.roundedRect(PDF_MARGIN, doc.page.height - 44, doc.page.width - PDF_MARGIN * 2, 1.5, 0.75).fill(PDF_COLORS.line);
       doc.font(PDF_FONT_NAMES.regular).fontSize(8).fillColor(PDF_COLORS.muted).text(
-        `Prefeitura Municipal de Umbaúba • Relatório Executivo de Remanejamentos Executados`,
+        "Prefeitura Municipal de Umbaúba • Relatório de Remanejamentos Executados",
         PDF_MARGIN,
         doc.page.height - 36,
-        { width: 360 },
+        { width: 280 },
       );
+      doc.text(`Ref. ${reportReference} • ${formatDateTime(args.generatedAt)}`, doc.page.width / 2 - 120, doc.page.height - 36, {
+        width: 240,
+        align: "center",
+      });
       doc.text(`Página ${pageIndex + 1} de ${range.count}`, doc.page.width - PDF_MARGIN - 90, doc.page.height - 36, {
         width: 90,
         align: "right",
@@ -1022,17 +1405,17 @@ async function buildBrandedWorkbook(args: {
   data: ExecutadoItem[];
   filters: ExportFilters;
   generatedBy: string;
+  generatedAt: Date;
 }) {
   const workbook = new ExcelJS.Workbook();
-  const generatedAt = new Date();
   const summary = getSummaryMetrics(args.data, args.filters);
 
   workbook.creator = "Sistema de Remanejamento Orçamentário";
   workbook.company = "Prefeitura Municipal de Umbauba";
   workbook.subject = "Relatório de Remanejamentos Executados";
   workbook.keywords = "remanejamento, orçamento, prefeitura, relatório";
-  workbook.created = generatedAt;
-  workbook.modified = generatedAt;
+  workbook.created = args.generatedAt;
+  workbook.modified = args.generatedAt;
 
   const worksheet = workbook.addWorksheet("Relatório Executado", {
     views: [{ state: "frozen", ySplit: TABLE_HEADER_ROW_INDEX }],
@@ -1119,7 +1502,7 @@ async function buildBrandedWorkbook(args: {
     labelRange: "F5:G5",
     valueRange: "F6:G6",
     label: "Emitido em",
-    value: formatDateTime(generatedAt),
+    value: formatDateTime(args.generatedAt),
   });
 
   addInfoCard(worksheet, {
@@ -1138,7 +1521,7 @@ async function buildBrandedWorkbook(args: {
     labelRange: "F8:G8",
     valueRange: "F9:G9",
     label: "Abrangência",
-    value: `${summary.totalRegistros} registros | ${summary.totalSecretarias} secretarias | ${summary.totalSolicitantes} solicitantes`,
+    value: buildScopeLabel(summary),
   });
 
   addInfoCard(worksheet, {
@@ -1247,7 +1630,7 @@ async function buildBrandedWorkbook(args: {
   await addSecretariaSummaryWorksheet({
     workbook,
     data: args.data,
-    generatedAt,
+    generatedAt: args.generatedAt,
     generatedBy: args.generatedBy,
     summary,
   });
@@ -1291,11 +1674,17 @@ export async function GET(request: NextRequest) {
     });
 
     const data = await listRemanejamentosExecutados(filters);
-    const filenameSuffix = createFilenameSuffix();
+    const generatedAt = new Date();
+    const generatedBy = user.name ?? "Administrador";
+    const filenameSuffix = createFilenameSuffix(generatedAt);
 
     if (format === "csv") {
-      const worksheet = XLSX.utils.json_to_sheet(mapCsvRows(data));
-      const csv = `\uFEFF${XLSX.utils.sheet_to_csv(worksheet)}`;
+      const csv = buildCsvContent({
+        data,
+        filters,
+        generatedBy,
+        generatedAt,
+      });
 
       logInfo("api.executados_export.done", {
         requestId,
@@ -1309,7 +1698,7 @@ export async function GET(request: NextRequest) {
       return new NextResponse(csv, {
         headers: {
           "Content-Type": "text/csv; charset=utf-8",
-          "Content-Disposition": `attachment; filename="remanejamentos-executados-${filenameSuffix}.csv"`,
+          "Content-Disposition": `attachment; filename="relatorio-remanejamentos-executados-${filenameSuffix}.csv"`,
         },
       });
     }
@@ -1318,7 +1707,8 @@ export async function GET(request: NextRequest) {
       const buffer = await buildPdfReport({
         data,
         filters,
-        generatedBy: user.name ?? "Administrador",
+        generatedBy,
+        generatedAt,
       });
 
       logInfo("api.executados_export.done", {
@@ -1341,7 +1731,8 @@ export async function GET(request: NextRequest) {
     const buffer = await buildBrandedWorkbook({
       data,
       filters,
-      generatedBy: user.name ?? "Administrador",
+      generatedBy,
+      generatedAt,
     });
 
     logInfo("api.executados_export.done", {
