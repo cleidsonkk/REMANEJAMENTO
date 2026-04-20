@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 
+import { reportClientError } from "@/lib/observability";
+
 export default function DashboardError({
   error,
   reset,
@@ -10,7 +12,9 @@ export default function DashboardError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error(error);
+    reportClientError("ui.dashboard_error", error, {
+      digest: error.digest ?? null,
+    });
   }, [error]);
 
   return (

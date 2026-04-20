@@ -3,7 +3,7 @@
 import type { ComponentType } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BellRing, Building2, FileClock, LayoutDashboard, ScrollText, Search, Shield, Users } from "lucide-react";
+import { Activity, BellRing, Building2, FileClock, LayoutDashboard, ScrollText, Search, Shield, Users } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -15,7 +15,8 @@ type IconName =
   | "executados"
   | "auditoria"
   | "busca"
-  | "notificacoes";
+  | "notificacoes"
+  | "saude";
 
 type NavItem = {
   href: string;
@@ -38,6 +39,7 @@ const iconMap: Record<IconName, ComponentType<{ className?: string }>> = {
   auditoria: Shield,
   busca: Search,
   notificacoes: BellRing,
+  saude: Activity,
 };
 
 export function SidebarNav({ items, mode = "desktop" }: SidebarNavProps) {

@@ -119,6 +119,7 @@ export function AppShell({ children, role, userName, notifications, unreadNotifi
     { href: "/dashboard/admin/usuarios", label: "Usuários", icon: "usuarios" as const },
     { href: "/dashboard/executados", label: "Executados", icon: "executados" as const },
     { href: "/dashboard/auditoria", label: "Auditoria", icon: "auditoria" as const },
+    { href: "/dashboard/saude", label: "Saude", icon: "saude" as const },
   ];
 
   const links = role === "ADMIN_PLANEJAMENTO" ? [...commonLinks, ...adminLinks] : commonLinks;

@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import PDFDocument from "pdfkit";
 import * as XLSX from "xlsx";
 
+import { createRequestId, logInfo, logWarn, reportServerError } from "@/lib/observability";
 import { formatCpf, formatCurrency, formatGovernmentCode } from "@/lib/utils";
 import { listRemanejamentosExecutados } from "@/services/remanejamento.service";
 import { getCurrentAuthenticatedUser } from "@/services/authorization.service";
@@ -1255,64 +1256,116 @@ async function buildBrandedWorkbook(args: {
 }
 
 export async function GET(request: NextRequest) {
-  const user = await getCurrentAuthenticatedUser();
-  if (user?.role !== "ADMIN_PLANEJAMENTO") {
-    return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
-  }
+  const startedAt = Date.now();
+  const requestId = createRequestId(request.headers.get("x-vercel-id"));
 
-  const url = new URL(request.url);
-  const requestedFormat = url.searchParams.get("format");
-  const format = requestedFormat === "xlsx" || requestedFormat === "pdf" ? requestedFormat : "csv";
-  const filters = {
-    secretaria: url.searchParams.get("secretaria") ?? "",
-    cpf: url.searchParams.get("cpf") ?? "",
-    acao: url.searchParams.get("acao") ?? "",
-    fonte: url.searchParams.get("fonte") ?? "",
-    elemento: url.searchParams.get("elemento") ?? "",
-    dataInicial: url.searchParams.get("dataInicial") ?? "",
-    dataFinal: url.searchParams.get("dataFinal") ?? "",
-  } satisfies ExportFilters;
+  try {
+    const user = await getCurrentAuthenticatedUser();
+    if (user?.role !== "ADMIN_PLANEJAMENTO") {
+      logWarn("api.executados_export.denied", {
+        requestId,
+        route: "/api/executados/export",
+      });
+      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+    }
 
-  const data = await listRemanejamentosExecutados(filters);
-  const filenameSuffix = createFilenameSuffix();
+    const url = new URL(request.url);
+    const requestedFormat = url.searchParams.get("format");
+    const format = requestedFormat === "xlsx" || requestedFormat === "pdf" ? requestedFormat : "csv";
+    const filters = {
+      secretaria: url.searchParams.get("secretaria") ?? "",
+      cpf: url.searchParams.get("cpf") ?? "",
+      acao: url.searchParams.get("acao") ?? "",
+      fonte: url.searchParams.get("fonte") ?? "",
+      elemento: url.searchParams.get("elemento") ?? "",
+      dataInicial: url.searchParams.get("dataInicial") ?? "",
+      dataFinal: url.searchParams.get("dataFinal") ?? "",
+    } satisfies ExportFilters;
 
-  if (format === "csv") {
-    const worksheet = XLSX.utils.json_to_sheet(mapCsvRows(data));
-    const csv = `\uFEFF${XLSX.utils.sheet_to_csv(worksheet)}`;
-
-    return new NextResponse(csv, {
-      headers: {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="remanejamentos-executados-${filenameSuffix}.csv"`,
-      },
+    logInfo("api.executados_export.start", {
+      requestId,
+      route: "/api/executados/export",
+      userId: user.id,
+      format,
+      filters,
     });
-  }
 
-  if (format === "pdf") {
-    const buffer = await buildPdfReport({
+    const data = await listRemanejamentosExecutados(filters);
+    const filenameSuffix = createFilenameSuffix();
+
+    if (format === "csv") {
+      const worksheet = XLSX.utils.json_to_sheet(mapCsvRows(data));
+      const csv = `\uFEFF${XLSX.utils.sheet_to_csv(worksheet)}`;
+
+      logInfo("api.executados_export.done", {
+        requestId,
+        route: "/api/executados/export",
+        userId: user.id,
+        format,
+        rows: data.length,
+        durationMs: Date.now() - startedAt,
+      });
+
+      return new NextResponse(csv, {
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="remanejamentos-executados-${filenameSuffix}.csv"`,
+        },
+      });
+    }
+
+    if (format === "pdf") {
+      const buffer = await buildPdfReport({
+        data,
+        filters,
+        generatedBy: user.name ?? "Administrador",
+      });
+
+      logInfo("api.executados_export.done", {
+        requestId,
+        route: "/api/executados/export",
+        userId: user.id,
+        format,
+        rows: data.length,
+        durationMs: Date.now() - startedAt,
+      });
+
+      return new NextResponse(new Uint8Array(buffer), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="relatorio-remanejamentos-executados-${filenameSuffix}.pdf"`,
+        },
+      });
+    }
+
+    const buffer = await buildBrandedWorkbook({
       data,
       filters,
       generatedBy: user.name ?? "Administrador",
     });
 
-    return new NextResponse(new Uint8Array(buffer), {
+    logInfo("api.executados_export.done", {
+      requestId,
+      route: "/api/executados/export",
+      userId: user.id,
+      format,
+      rows: data.length,
+      durationMs: Date.now() - startedAt,
+    });
+
+    return new NextResponse(buffer, {
       headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="relatorio-remanejamentos-executados-${filenameSuffix}.pdf"`,
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="relatorio-remanejamentos-executados-${filenameSuffix}.xlsx"`,
       },
     });
+  } catch (error) {
+    reportServerError("api.executados_export.failed", error, {
+      requestId,
+      route: "/api/executados/export",
+      durationMs: Date.now() - startedAt,
+    });
+
+    return NextResponse.json({ error: "Nao foi possivel exportar o relatorio." }, { status: 500 });
   }
-
-  const buffer = await buildBrandedWorkbook({
-    data,
-    filters,
-    generatedBy: user.name ?? "Administrador",
-  });
-
-  return new NextResponse(buffer, {
-    headers: {
-      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="relatorio-remanejamentos-executados-${filenameSuffix}.xlsx"`,
-    },
-  });
 }
