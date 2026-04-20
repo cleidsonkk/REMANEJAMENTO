@@ -134,10 +134,10 @@ export async function listNotificationsForUser(userId: string, limit = 40): Prom
   }
 }
 
-export async function getNotificationSummaryForUser(userId: string) {
+export async function getNotificationSummaryForUser(userId: string, limit = 5) {
   try {
     const [notifications, unreadCount] = await Promise.all([
-      listNotificationsForUser(userId, 5),
+      listNotificationsForUser(userId, limit),
       prisma.notification.count({
         where: {
           userId,
