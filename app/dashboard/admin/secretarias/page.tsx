@@ -7,6 +7,7 @@ import {
   updateSecretariaAction,
 } from "@/app/actions/admin-actions";
 import { EmptyState } from "@/components/shared/empty-state";
+import { PaginationControls } from "@/components/shared/pagination-controls";
 import { PageHeader } from "@/components/shared/page-header";
 import { SectionNote } from "@/components/shared/section-note";
 import { Button } from "@/components/ui/button";
@@ -14,9 +15,10 @@ import { FormError } from "@/components/ui/form-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SimpleFormCard } from "@/features/admin/simple-form-card";
+import { parsePageParam } from "@/lib/pagination";
 import { formatGovernmentCode, formatSequentialCode } from "@/lib/utils";
 import { requireRole } from "@/services/authorization.service";
-import { listSecretarias } from "@/services/secretaria.service";
+import { getSecretariaById, listSecretarias, listSecretariasPage } from "@/services/secretaria.service";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -25,20 +27,48 @@ export default async function SecretariasPage({ searchParams }: { searchParams: 
 
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
+  const page = parsePageParam(typeof params.page === "string" ? params.page : undefined);
   const edit = typeof params.edit === "string" ? params.edit : "";
   const success = typeof params.success === "string" ? params.success : "";
   const error = typeof params.error === "string" ? params.error : "";
 
-  const secretarias = await listSecretarias(false, q);
-  const editingSecretaria = secretarias.find((item) => item.id === edit) ?? null;
+  const [secretariasPage, secretariasSummary, editingSecretaria] = await Promise.all([
+    listSecretariasPage({ search: q, page, pageSize: 10 }),
+    listSecretarias(false, q),
+    edit ? getSecretariaById(edit) : Promise.resolve(null),
+  ]);
+  const secretarias = secretariasPage.items;
   const secretariaFormAction = editingSecretaria
     ? updateSecretariaAction.bind(null, editingSecretaria.id)
     : createSecretariaAction;
+  const buildSecretariasHref = (extra: Record<string, string | undefined> = {}) => {
+    const search = new URLSearchParams();
 
-  const activeSecretarias = secretarias.filter((item) => item.statusAtivo).length;
-  const inactiveSecretarias = secretarias.length - activeSecretarias;
-  const linkedUsers = secretarias.reduce((sum, item) => sum + item._count.userLinks, 0);
-  const catalogItems = secretarias.reduce((sum, item) => sum + item._count.catalogItems, 0);
+    if (q) {
+      search.set("q", q);
+    }
+
+    if (secretariasPage.page > 1) {
+      search.set("page", String(secretariasPage.page));
+    }
+
+    for (const [key, value] of Object.entries(extra)) {
+      if (!value) {
+        search.delete(key);
+        continue;
+      }
+
+      search.set(key, value);
+    }
+
+    const query = search.toString();
+    return query ? `/dashboard/admin/secretarias?${query}` : "/dashboard/admin/secretarias";
+  };
+
+  const activeSecretarias = secretariasSummary.filter((item) => item.statusAtivo).length;
+  const inactiveSecretarias = secretariasSummary.length - activeSecretarias;
+  const linkedUsers = secretariasSummary.reduce((sum, item) => sum + item._count.userLinks, 0);
+  const catalogItems = secretariasSummary.reduce((sum, item) => sum + item._count.catalogItems, 0);
 
   return (
     <div className="space-y-6">
@@ -99,6 +129,8 @@ export default async function SecretariasPage({ searchParams }: { searchParams: 
           description="Cadastro institucional com código interno sequencial gerado automaticamente e leitura preparada para operação administrativa diária."
         >
           <form action={secretariaFormAction} className="space-y-4">
+            <input name="contextQ" type="hidden" value={q} />
+            <input name="contextPage" type="hidden" value={String(secretariasPage.page)} />
             {success ? (
               <div className="rounded-2xl border border-emerald-300/30 bg-emerald-400/10 px-4 py-3 text-sm leading-6 text-emerald-100">
                 {success}
@@ -158,7 +190,7 @@ export default async function SecretariasPage({ searchParams }: { searchParams: 
                 {editingSecretaria ? "Salvar alterações" : "Cadastrar secretaria"}
               </Button>
               {editingSecretaria ? (
-                <Link href="/dashboard/admin/secretarias">
+                <Link href={buildSecretariasHref({ edit: undefined })}>
                   <Button type="button" variant="outline">
                     Cancelar edição
                   </Button>
@@ -225,13 +257,15 @@ export default async function SecretariasPage({ searchParams }: { searchParams: 
                       </div>
 
                       <div className="mt-4 flex flex-wrap gap-2">
-                        <Link href={`/dashboard/admin/secretarias?edit=${item.id}`}>
+                        <Link href={buildSecretariasHref({ edit: item.id })}>
                           <Button size="sm" type="button" variant="outline">
                             <SquarePen className="mr-2 h-4 w-4" />
                             Editar
                           </Button>
                         </Link>
                         <form action={toggleSecretariaStatusAction.bind(null, item.id)}>
+                          <input name="contextQ" type="hidden" value={q} />
+                          <input name="contextPage" type="hidden" value={String(secretariasPage.page)} />
                           <Button size="sm" type="submit" variant="outline">
                             {item.statusAtivo ? "Inativar" : "Reativar"}
                           </Button>
@@ -287,13 +321,15 @@ export default async function SecretariasPage({ searchParams }: { searchParams: 
                           </td>
                           <td className="px-5 py-4">
                             <div className="flex flex-wrap gap-2">
-                              <Link href={`/dashboard/admin/secretarias?edit=${item.id}`}>
+                              <Link href={buildSecretariasHref({ edit: item.id })}>
                                 <Button size="sm" type="button" variant="outline">
                                   <SquarePen className="mr-2 h-4 w-4" />
                                   Editar
                                 </Button>
                               </Link>
                               <form action={toggleSecretariaStatusAction.bind(null, item.id)}>
+                                <input name="contextQ" type="hidden" value={q} />
+                                <input name="contextPage" type="hidden" value={String(secretariasPage.page)} />
                                 <Button size="sm" type="submit" variant="outline">
                                   {item.statusAtivo ? "Inativar" : "Reativar"}
                                 </Button>
@@ -305,6 +341,15 @@ export default async function SecretariasPage({ searchParams }: { searchParams: 
                     </tbody>
                   </table>
                 </div>
+
+                <PaginationControls
+                  page={secretariasPage.page}
+                  pageSize={secretariasPage.pageSize}
+                  pathname="/dashboard/admin/secretarias"
+                  query={{ q: q || undefined }}
+                  total={secretariasPage.total}
+                  totalPages={secretariasPage.totalPages}
+                />
               </>
             ) : (
               <EmptyState

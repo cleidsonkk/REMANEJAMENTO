@@ -1,6 +1,7 @@
 import { ClipboardCheck, Fingerprint, Shield } from "lucide-react";
 
 import { EmptyState } from "@/components/shared/empty-state";
+import { PaginationControls } from "@/components/shared/pagination-controls";
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,8 +9,9 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { prisma } from "@/lib/prisma";
+import { parsePageParam } from "@/lib/pagination";
 import { requireRole } from "@/services/authorization.service";
+import { listAuditLogsPage } from "@/services/audit-log.service";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -54,24 +56,15 @@ export default async function AuditoriaPage({ searchParams }: { searchParams: Se
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const action = typeof params.action === "string" ? params.action.trim() : "";
   const entity = typeof params.entity === "string" ? params.entity.trim() : "";
-
-  const logs = await prisma.auditLog.findMany({
-    include: { user: true },
-    where: {
-      action: action || undefined,
-      entity: entity || undefined,
-      OR: q
-        ? [
-            { action: { contains: q, mode: "insensitive" } },
-            { entity: { contains: q, mode: "insensitive" } },
-            { entityId: { contains: q, mode: "insensitive" } },
-            { user: { is: { nome: { contains: q, mode: "insensitive" } } } },
-          ]
-        : undefined,
-    },
-    orderBy: { timestamp: "desc" },
-    take: 80,
+  const page = parsePageParam(typeof params.page === "string" ? params.page : undefined);
+  const logsPage = await listAuditLogsPage({
+    action,
+    entity,
+    page,
+    pageSize: 20,
+    search: q,
   });
+  const logs = logsPage.items;
 
   const successEvents = logs.filter((item) => !item.action.includes("FAILURE")).length;
   const failureEvents = logs.filter((item) => item.action.includes("FAILURE")).length;
@@ -88,18 +81,18 @@ export default async function AuditoriaPage({ searchParams }: { searchParams: Se
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
               <p className="text-sm text-white/70">Eventos filtrados</p>
-              <p className="mt-2 text-3xl font-semibold text-white">{logs.length}</p>
+              <p className="mt-2 text-3xl font-semibold text-white">{logsPage.total}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
-              <p className="text-sm text-white/70">Falhas registradas</p>
+              <p className="text-sm text-white/70">Falhas na página</p>
               <p className="mt-2 text-3xl font-semibold text-white">{failureEvents}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
-              <p className="text-sm text-white/70">Eventos de autenticação</p>
+              <p className="text-sm text-white/70">Autenticação na página</p>
               <p className="mt-2 text-3xl font-semibold text-white">{authEvents}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
-              <p className="text-sm text-white/70">Usuários envolvidos</p>
+              <p className="text-sm text-white/70">Usuários na página</p>
               <p className="mt-2 text-3xl font-semibold text-white">{responsibleUsers}</p>
             </div>
           </div>
@@ -250,6 +243,21 @@ export default async function AuditoriaPage({ searchParams }: { searchParams: Se
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            <div className="mt-6">
+              <PaginationControls
+                page={logsPage.page}
+                pageSize={logsPage.pageSize}
+                pathname="/dashboard/auditoria"
+                query={{
+                  action: action || undefined,
+                  entity: entity || undefined,
+                  q: q || undefined,
+                }}
+                total={logsPage.total}
+                totalPages={logsPage.totalPages}
+              />
             </div>
           </>
         ) : (

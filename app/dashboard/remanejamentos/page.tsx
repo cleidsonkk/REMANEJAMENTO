@@ -139,7 +139,9 @@ export default async function RemanejamentosPage({ searchParams }: { searchParam
         }
       />
 
-      {session.user.role === "USUARIO_SECRETARIA" ? <RemanejamentoForm secretarias={secretariasOperacionais} /> : null}
+      {session.user.role === "USUARIO_SECRETARIA" ? (
+        <RemanejamentoForm draftScopeKey={session.user.id} secretarias={secretariasOperacionais} />
+      ) : null}
 
       <Card className="border-white/70 bg-white/92">
         <CardTitle>Lotes e solicitações registradas</CardTitle>

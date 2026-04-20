@@ -9,6 +9,7 @@ import {
   updateUserAction,
 } from "@/app/actions/admin-actions";
 import { EmptyState } from "@/components/shared/empty-state";
+import { PaginationControls } from "@/components/shared/pagination-controls";
 import { PageHeader } from "@/components/shared/page-header";
 import { SectionNote } from "@/components/shared/section-note";
 import { Badge } from "@/components/ui/badge";
@@ -18,10 +19,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { SimpleFormCard } from "@/features/admin/simple-form-card";
+import { parsePageParam } from "@/lib/pagination";
 import { formatCpf, formatGovernmentCode, getPasswordPolicyMessage } from "@/lib/utils";
 import { requireRole } from "@/services/authorization.service";
-import { listSecretarias } from "@/services/secretaria.service";
-import { listUsers } from "@/services/user.service";
+import { listActiveSecretariaOptions } from "@/services/secretaria.service";
+import { getUserById, listUsersForSelect, listUsersPage } from "@/services/user.service";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -80,16 +82,45 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Sea
 
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
+  const page = parsePageParam(typeof params.page === "string" ? params.page : undefined);
   const edit = typeof params.edit === "string" ? params.edit : "";
   const userError = typeof params.userError === "string" ? params.userError : "";
   const userSuccess = typeof params.userSuccess === "string" ? params.userSuccess : "";
   const resetError = typeof params.resetError === "string" ? params.resetError : "";
   const resetSuccess = typeof params.resetSuccess === "string" ? params.resetSuccess : "";
-  const [users, secretarias] = await Promise.all([listUsers(q), listSecretarias(true)]);
+  const [usersPage, secretarias, resetUserOptions, editingUser] = await Promise.all([
+    listUsersPage({ search: q, page, pageSize: 10 }),
+    listActiveSecretariaOptions(),
+    listUsersForSelect(),
+    edit ? getUserById(edit) : Promise.resolve(null),
+  ]);
 
-  const editingUser = users.find((item) => item.id === edit) ?? null;
+  const users = usersPage.items;
   const userFormAction = editingUser ? updateUserAction.bind(null, editingUser.id) : createUserAction;
   const linkedSecretariaIds = new Set(editingUser?.secretariasVinculadas.map((item) => item.secretariaId) ?? []);
+  const buildUsuariosHref = (extra: Record<string, string | undefined> = {}) => {
+    const search = new URLSearchParams();
+
+    if (q) {
+      search.set("q", q);
+    }
+
+    if (usersPage.page > 1) {
+      search.set("page", String(usersPage.page));
+    }
+
+    for (const [key, value] of Object.entries(extra)) {
+      if (!value) {
+        search.delete(key);
+        continue;
+      }
+
+      search.set(key, value);
+    }
+
+    const query = search.toString();
+    return query ? `/dashboard/admin/usuarios?${query}` : "/dashboard/admin/usuarios";
+  };
 
   const roleLabel: Record<UserRole, string> = {
     ADMIN_PLANEJAMENTO: "Administrador",
@@ -111,7 +142,7 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Sea
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
               <p className="text-sm text-white/70">Usuários cadastrados</p>
-              <p className="mt-2 text-3xl font-semibold text-white">{users.length}</p>
+              <p className="mt-2 text-3xl font-semibold text-white">{usersPage.total}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-4">
               <p className="text-sm text-white/70">Secretarias ativas</p>
@@ -153,6 +184,8 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Sea
             title={editingUser ? "Editar usuário" : "Novo usuário"}
           >
             <form action={userFormAction} className="space-y-5" noValidate>
+              <input name="contextQ" type="hidden" value={q} />
+              <input name="contextPage" type="hidden" value={String(usersPage.page)} />
               {userSuccess ? (
                 <div className="rounded-2xl border border-emerald-300/30 bg-emerald-400/10 px-4 py-3 text-sm leading-6 text-emerald-100">
                   {userSuccess}
@@ -332,7 +365,7 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Sea
               <div className="flex flex-wrap gap-3 pt-1">
                 <Button type="submit">{editingUser ? "Salvar alterações" : "Cadastrar usuário"}</Button>
                 {editingUser ? (
-                  <Link href="/dashboard/admin/usuarios">
+                  <Link href={buildUsuariosHref({ edit: undefined })}>
                     <Button type="button" variant="outline">
                       Cancelar edição
                     </Button>
@@ -352,6 +385,8 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Sea
             title="Recuperação administrativa de acesso"
           >
             <form action={resetUserPasswordAction} className="space-y-5">
+              <input name="contextQ" type="hidden" value={q} />
+              <input name="contextPage" type="hidden" value={String(usersPage.page)} />
               {resetSuccess ? (
                 <div className="rounded-2xl border border-emerald-300/30 bg-emerald-400/10 px-4 py-3 text-sm leading-6 text-emerald-100">
                   {resetSuccess}
@@ -364,7 +399,7 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Sea
                 <Select
                   id="userId"
                   name="userId"
-                  options={users.map((item) => ({
+                  options={resetUserOptions.map((item) => ({
                     value: item.id,
                     label: `${item.nome} • ${formatCpf(item.cpf)}`,
                   }))}
@@ -436,13 +471,15 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Sea
                       </div>
 
                       <div className="mt-4 flex flex-wrap gap-2">
-                        <Link href={`/dashboard/admin/usuarios?edit=${item.id}`}>
+                        <Link href={buildUsuariosHref({ edit: item.id })}>
                           <Button size="sm" type="button" variant="outline">
                             <SquarePen className="mr-2 h-4 w-4" />
                             Editar
                           </Button>
                         </Link>
                         <form action={toggleUserStatusAction.bind(null, item.id)}>
+                          <input name="contextQ" type="hidden" value={q} />
+                          <input name="contextPage" type="hidden" value={String(usersPage.page)} />
                           <Button size="sm" type="submit" variant="outline">
                             {item.status === "ATIVO" ? "Inativar" : "Reativar"}
                           </Button>
@@ -494,12 +531,14 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Sea
                           </td>
                           <td className="px-5 py-4">
                             <div className="flex flex-wrap gap-2">
-                              <Link href={`/dashboard/admin/usuarios?edit=${item.id}`}>
+                              <Link href={buildUsuariosHref({ edit: item.id })}>
                                 <Button size="sm" type="button" variant="outline">
                                   Editar
                                 </Button>
                               </Link>
                               <form action={toggleUserStatusAction.bind(null, item.id)}>
+                                <input name="contextQ" type="hidden" value={q} />
+                                <input name="contextPage" type="hidden" value={String(usersPage.page)} />
                                 <Button size="sm" type="submit" variant="outline">
                                   {item.status === "ATIVO" ? "Inativar" : "Reativar"}
                                 </Button>
@@ -511,6 +550,15 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Sea
                     </tbody>
                   </table>
                 </div>
+
+                <PaginationControls
+                  page={usersPage.page}
+                  pageSize={usersPage.pageSize}
+                  pathname="/dashboard/admin/usuarios"
+                  query={{ q: q || undefined }}
+                  total={usersPage.total}
+                  totalPages={usersPage.totalPages}
+                />
               </>
             ) : (
               <EmptyState

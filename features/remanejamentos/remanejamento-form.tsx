@@ -14,10 +14,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  buildRemanejamentoDraftKey,
+  createEmptyRemanejamentoEntry,
+  parseRemanejamentoDraft,
+  serializeRemanejamentoDraft,
+} from "@/features/remanejamentos/remanejamento-draft";
 import { formatCurrency, formatGovernmentCode, parseBrazilianCurrencyInput } from "@/lib/utils";
 import {
   remanejamentoSchema,
-  type RemanejamentoEntrySchema,
   type RemanejamentoSchema,
 } from "@/lib/validations/remanejamento";
 
@@ -37,23 +42,8 @@ type SecretariaOperacional = {
   catalog: CatalogItem[];
 };
 
-const DRAFT_KEY = "remanejamento-draft-v3";
-
 function uniqueValues(items: CatalogItem[], field: keyof CatalogItem) {
   return Array.from(new Set(items.map((item) => String(item[field]).trim()).filter(Boolean)));
-}
-
-function createEmptyEntry(): RemanejamentoEntrySchema {
-  return {
-    destinoAcao: "",
-    destinoFonte: "",
-    destinoElemento: "",
-    destinoValor: "" as never,
-    origemAcao: "",
-    origemFonte: "",
-    origemElemento: "",
-    origemValor: "" as never,
-  };
 }
 
 function formatCurrencyTypingValue(value: string) {
@@ -109,11 +99,19 @@ function SuggestionField({
   );
 }
 
-export function RemanejamentoForm({ secretarias }: { secretarias: SecretariaOperacional[] }) {
+export function RemanejamentoForm({
+  draftScopeKey,
+  secretarias,
+}: {
+  draftScopeKey: string;
+  secretarias: SecretariaOperacional[];
+}) {
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [draftLoaded, setDraftLoaded] = useState(false);
 
   const defaultSecretariaId = secretarias.find((item) => item.isDefault)?.id ?? secretarias[0]?.id ?? "";
+  const draftKey = useMemo(() => buildRemanejamentoDraftKey(draftScopeKey), [draftScopeKey]);
+  const validSecretariaIds = useMemo(() => secretarias.map((item) => item.id), [secretarias]);
 
   const {
     register,
@@ -128,7 +126,7 @@ export function RemanejamentoForm({ secretarias }: { secretarias: SecretariaOper
     defaultValues: {
       secretariaId: defaultSecretariaId,
       justificativa: "",
-      entries: [createEmptyEntry()],
+      entries: [createEmptyRemanejamentoEntry()],
     },
     mode: "onChange",
   });
@@ -147,38 +145,40 @@ export function RemanejamentoForm({ secretarias }: { secretarias: SecretariaOper
   const catalog = selectedSecretaria?.catalog ?? [];
 
   useEffect(() => {
-    const raw = localStorage.getItem(DRAFT_KEY);
+    localStorage.removeItem("remanejamento-draft-v3");
+
+    const raw = localStorage.getItem(draftKey);
     if (!raw) {
       setDraftLoaded(true);
       return;
     }
 
-    try {
-      const parsed = JSON.parse(raw) as Partial<RemanejamentoSchema>;
-      const restoredSecretariaId =
-        parsed.secretariaId && secretarias.some((item) => item.id === parsed.secretariaId)
-          ? parsed.secretariaId
-          : defaultSecretariaId;
+    const parsed = parseRemanejamentoDraft(raw, {
+      fallbackSecretariaId: defaultSecretariaId,
+      validSecretariaIds,
+    });
 
-      reset({
-        secretariaId: restoredSecretariaId,
-        justificativa: parsed.justificativa ?? "",
-        entries: parsed.entries?.length ? parsed.entries : [createEmptyEntry()],
-      });
-    } catch {
-      localStorage.removeItem(DRAFT_KEY);
-    } finally {
+    if (!parsed) {
+      localStorage.removeItem(draftKey);
       setDraftLoaded(true);
+      return;
     }
-  }, [defaultSecretariaId, reset, secretarias]);
+
+    reset({
+      secretariaId: parsed.secretariaId ?? defaultSecretariaId,
+      justificativa: parsed.justificativa ?? "",
+      entries: parsed.entries?.length ? parsed.entries : [createEmptyRemanejamentoEntry()],
+    });
+    setDraftLoaded(true);
+  }, [defaultSecretariaId, draftKey, reset, validSecretariaIds]);
 
   useEffect(() => {
     if (!draftLoaded) {
       return;
     }
 
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(deferredValues));
-  }, [deferredValues, draftLoaded]);
+    localStorage.setItem(draftKey, serializeRemanejamentoDraft(deferredValues));
+  }, [deferredValues, draftKey, draftLoaded]);
 
   const acaoSuggestions = useMemo(() => uniqueValues(catalog, "acao"), [catalog]);
   const fonteSuggestions = useMemo(() => uniqueValues(catalog, "fonte"), [catalog]);
@@ -232,11 +232,11 @@ export function RemanejamentoForm({ secretarias }: { secretarias: SecretariaOper
       return;
     }
 
-    localStorage.removeItem(DRAFT_KEY);
+    localStorage.removeItem(draftKey);
     reset({
       secretariaId: defaultSecretariaId,
       justificativa: "",
-      entries: [createEmptyEntry()],
+      entries: [createEmptyRemanejamentoEntry()],
     });
     setFeedback({
       type: "success",
@@ -334,10 +334,10 @@ export function RemanejamentoForm({ secretarias }: { secretarias: SecretariaOper
           <div className="rounded-[1.5rem] border bg-muted/35 p-4">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Save className="h-4 w-4 text-primary" />
-              Rascunho automático
+              Rascunho automático protegido
             </div>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              O formulário preserva a secretaria escolhida, a justificativa e todos os itens do lote localmente até o envio.
+              O formulário preserva o lote apenas neste usuário, com chave segregada e expiração automática de segurança.
             </p>
           </div>
 
@@ -382,7 +382,12 @@ export function RemanejamentoForm({ secretarias }: { secretarias: SecretariaOper
                       <h4 className="mt-2 text-lg font-semibold text-slate-950">{`Remanejamento ${String(index + 1).padStart(2, "0")}`}</h4>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Button className="gap-2" onClick={() => append(createEmptyEntry())} type="button" variant="outline">
+                      <Button
+                        className="gap-2"
+                        onClick={() => append(createEmptyRemanejamentoEntry())}
+                        type="button"
+                        variant="outline"
+                      >
                         <Plus className="h-4 w-4" />
                         Adicionar item
                       </Button>

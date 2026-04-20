@@ -1,6 +1,6 @@
 "use server";
 
-import { Prisma, UserRole, UserStatus } from "@prisma/client";
+import { Prisma, RemanejamentoStatus, UserRole, UserStatus } from "@prisma/client";
 import { hash } from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -15,12 +15,14 @@ import { getCurrentAuthenticatedUser } from "@/services/authorization.service";
 
 function redirectAdminUsuarios(params: Record<string, string>) {
   const search = new URLSearchParams(params);
-  redirect(`/dashboard/admin/usuarios?${search.toString()}`);
+  const query = search.toString();
+  redirect(query ? `/dashboard/admin/usuarios?${query}` : "/dashboard/admin/usuarios");
 }
 
 function redirectAdminSecretarias(params: Record<string, string>) {
   const search = new URLSearchParams(params);
-  redirect(`/dashboard/admin/secretarias?${search.toString()}`);
+  const query = search.toString();
+  redirect(query ? `/dashboard/admin/secretarias?${query}` : "/dashboard/admin/secretarias");
 }
 
 function getPrismaDuplicateMessage(error: unknown, fallback: string) {
@@ -61,6 +63,16 @@ function normalizeSecretariaIds(values: FormDataEntryValue[]) {
         .filter(Boolean),
     ),
   );
+}
+
+function getListContext(formData: FormData) {
+  const q = String(formData.get("contextQ") ?? "").trim();
+  const page = Number.parseInt(String(formData.get("contextPage") ?? ""), 10);
+
+  return {
+    ...(q ? { q } : {}),
+    ...(Number.isFinite(page) && page > 1 ? { page: String(page) } : {}),
+  };
 }
 
 async function requirePlanningAdmin() {
@@ -118,6 +130,104 @@ async function ensureLastAdminWillRemain(targetUserId: string) {
   }
 }
 
+async function ensureSecretariaCanBeInactivated(secretariaId: string) {
+  const [activeUsers, pendingRemanejamentos] = await Promise.all([
+    prisma.user.count({
+      where: {
+        status: UserStatus.ATIVO,
+        OR: [{ secretariaId }, { secretariasVinculadas: { some: { secretariaId } } }],
+      },
+    }),
+    prisma.remanejamento.count({
+      where: {
+        secretariaId,
+        status: RemanejamentoStatus.PENDENTE,
+      },
+    }),
+  ]);
+
+  if (!activeUsers && !pendingRemanejamentos) {
+    return;
+  }
+
+  const blockers = [
+    activeUsers
+      ? `${activeUsers} ${activeUsers === 1 ? "usuário ativo vinculado" : "usuários ativos vinculados"}`
+      : null,
+    pendingRemanejamentos
+      ? `${pendingRemanejamentos} ${
+          pendingRemanejamentos === 1 ? "remanejamento pendente" : "remanejamentos pendentes"
+        }`
+      : null,
+  ].filter(Boolean);
+
+  throw new Error(`Não é possível inativar a secretaria porque há ${blockers.join(" e ")}.`);
+}
+
+function shouldRetrySecretariaCreate(error: unknown) {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
+    return false;
+  }
+
+  if (error.code === "P2034") {
+    return true;
+  }
+
+  if (error.code !== "P2002") {
+    return false;
+  }
+
+  const target = Array.isArray(error.meta?.target)
+    ? error.meta.target.map((item) => String(item))
+    : typeof error.meta?.target === "string"
+      ? [error.meta.target]
+      : [];
+
+  return target.includes("codigo");
+}
+
+async function createSecretariaWithGeneratedCode(data: {
+  nomeSecretaria: string;
+  sigla: string | null;
+  unidadeOrcamentaria: string;
+  nomeSecretario: string;
+  statusAtivo: boolean;
+}) {
+  const maxAttempts = 5;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await prisma.$transaction(
+        async (tx) => {
+          const aggregate = await tx.secretaria.aggregate({
+            _max: {
+              codigo: true,
+            },
+          });
+
+          return tx.secretaria.create({
+            data: {
+              ...data,
+              codigo: (aggregate._max.codigo ?? 0) + 1,
+            },
+          });
+        },
+        {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        },
+      );
+    } catch (error) {
+      if (attempt < maxAttempts && shouldRetrySecretariaCreate(error)) {
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw new Error("Não foi possível gerar um código interno seguro para a secretaria.");
+}
+
 async function syncUserSecretariaLinks(tx: Prisma.TransactionClient, userId: string, secretariaIds: string[]) {
   await tx.userSecretaria.deleteMany({
     where: { userId },
@@ -154,6 +264,7 @@ function sanitizeUserForAudit(user: {
 export async function createSecretariaAction(formData: FormData) {
   try {
     const session = await requirePlanningAdmin();
+    const context = getListContext(formData);
     const parsed = secretariaSchema.safeParse({
       nomeSecretaria: formData.get("nomeSecretaria"),
       sigla: formData.get("sigla"),
@@ -167,23 +278,14 @@ export async function createSecretariaAction(formData: FormData) {
       throw new Error(parsed.error.issues[0]?.message ?? "Dados inválidos.");
     }
 
-    const aggregate = await prisma.secretaria.aggregate({
-      _max: {
-        codigo: true,
-      },
-    });
-
-    const nextCodigo = (aggregate._max.codigo ?? 0) + 1;
-
-    const secretaria = await prisma.secretaria.create({
-      data: {
-        ...parsed.data,
-        codigo: nextCodigo,
-        unidadeOrcamentaria: String(parsed.data.unidadeOrcamentaria || parsed.data.codigo)
-          .replace(/\D/g, "")
-          .padStart(5, "0"),
-        sigla: parsed.data.sigla || null,
-      },
+    const secretaria = await createSecretariaWithGeneratedCode({
+      nomeSecretaria: parsed.data.nomeSecretaria,
+      sigla: parsed.data.sigla || null,
+      unidadeOrcamentaria: String(parsed.data.unidadeOrcamentaria || parsed.data.codigo)
+        .replace(/\D/g, "")
+        .padStart(5, "0"),
+      nomeSecretario: parsed.data.nomeSecretario,
+      statusAtivo: parsed.data.statusAtivo,
     });
 
     await createAuditLog({
@@ -195,7 +297,7 @@ export async function createSecretariaAction(formData: FormData) {
     });
 
     revalidatePath("/dashboard/admin/secretarias");
-    redirectAdminSecretarias({ success: "Secretaria cadastrada com sucesso." });
+    redirectAdminSecretarias({ success: "Secretaria cadastrada com sucesso.", ...context });
   } catch (error) {
     if (isRedirectError(error)) {
       throw error;
@@ -203,6 +305,7 @@ export async function createSecretariaAction(formData: FormData) {
 
     redirectAdminSecretarias({
       error: getPrismaDuplicateMessage(error, "Já existe uma secretaria com esta unidade orçamentária."),
+      ...getListContext(formData),
     });
   }
 }
@@ -210,6 +313,7 @@ export async function createSecretariaAction(formData: FormData) {
 export async function updateSecretariaAction(secretariaId: string, formData: FormData) {
   try {
     const session = await requirePlanningAdmin();
+    const context = getListContext(formData);
     const parsed = secretariaSchema.safeParse({
       nomeSecretaria: formData.get("nomeSecretaria"),
       sigla: formData.get("sigla"),
@@ -229,6 +333,10 @@ export async function updateSecretariaAction(secretariaId: string, formData: For
 
     if (!current) {
       throw new Error("Secretaria não encontrada.");
+    }
+
+    if (current.statusAtivo && !parsed.data.statusAtivo) {
+      await ensureSecretariaCanBeInactivated(secretariaId);
     }
 
     const secretaria = await prisma.secretaria.update({
@@ -252,7 +360,7 @@ export async function updateSecretariaAction(secretariaId: string, formData: For
     });
 
     revalidatePath("/dashboard/admin/secretarias");
-    redirectAdminSecretarias({ success: "Secretaria atualizada com sucesso.", edit: secretariaId });
+    redirectAdminSecretarias({ success: "Secretaria atualizada com sucesso.", edit: secretariaId, ...context });
   } catch (error) {
     if (isRedirectError(error)) {
       throw error;
@@ -261,19 +369,25 @@ export async function updateSecretariaAction(secretariaId: string, formData: For
     redirectAdminSecretarias({
       error: getPrismaDuplicateMessage(error, "Não foi possível atualizar a secretaria."),
       edit: secretariaId,
+      ...getListContext(formData),
     });
   }
 }
 
-export async function toggleSecretariaStatusAction(secretariaId: string) {
+export async function toggleSecretariaStatusAction(secretariaId: string, formData: FormData) {
   try {
     const session = await requirePlanningAdmin();
+    const context = getListContext(formData);
     const current = await prisma.secretaria.findUnique({
       where: { id: secretariaId },
     });
 
     if (!current) {
       throw new Error("Secretaria não encontrada.");
+    }
+
+    if (current.statusAtivo) {
+      await ensureSecretariaCanBeInactivated(secretariaId);
     }
 
     const updated = await prisma.secretaria.update({
@@ -295,6 +409,7 @@ export async function toggleSecretariaStatusAction(secretariaId: string) {
     revalidatePath("/dashboard/admin/secretarias");
     redirectAdminSecretarias({
       success: updated.statusAtivo ? "Secretaria reativada com sucesso." : "Secretaria inativada com sucesso.",
+      ...context,
     });
   } catch (error) {
     if (isRedirectError(error)) {
@@ -303,6 +418,7 @@ export async function toggleSecretariaStatusAction(secretariaId: string) {
 
     redirectAdminSecretarias({
       error: error instanceof Error ? error.message : "Não foi possível alterar o status da secretaria.",
+      ...getListContext(formData),
     });
   }
 }
@@ -310,6 +426,7 @@ export async function toggleSecretariaStatusAction(secretariaId: string) {
 export async function createUserAction(formData: FormData) {
   try {
     const session = await requirePlanningAdmin();
+    const context = getListContext(formData);
     const defaultSecretariaIdRaw = String(formData.get("secretariaId") ?? "").trim();
     const secretariaIds = normalizeSecretariaIds([
       ...formData.getAll("secretariaIds"),
@@ -372,19 +489,23 @@ export async function createUserAction(formData: FormData) {
     });
 
     revalidatePath("/dashboard/admin/usuarios");
-    redirectAdminUsuarios({ userSuccess: "Usuário cadastrado com sucesso." });
+    redirectAdminUsuarios({ userSuccess: "Usuário cadastrado com sucesso.", ...context });
   } catch (error) {
     if (isRedirectError(error)) {
       throw error;
     }
 
-    redirectAdminUsuarios({ userError: getPrismaDuplicateMessage(error, "CPF ou e-mail já cadastrado no sistema.") });
+    redirectAdminUsuarios({
+      userError: getPrismaDuplicateMessage(error, "CPF ou e-mail já cadastrado no sistema."),
+      ...getListContext(formData),
+    });
   }
 }
 
 export async function updateUserAction(userId: string, formData: FormData) {
   try {
     const session = await requirePlanningAdmin();
+    const context = getListContext(formData);
     const defaultSecretariaIdRaw = String(formData.get("secretariaId") ?? "").trim();
     const secretariaIds = normalizeSecretariaIds([
       ...formData.getAll("secretariaIds"),
@@ -471,7 +592,7 @@ export async function updateUserAction(userId: string, formData: FormData) {
     });
 
     revalidatePath("/dashboard/admin/usuarios");
-    redirectAdminUsuarios({ userSuccess: "Usuário atualizado com sucesso.", edit: userId });
+    redirectAdminUsuarios({ userSuccess: "Usuário atualizado com sucesso.", edit: userId, ...context });
   } catch (error) {
     if (isRedirectError(error)) {
       throw error;
@@ -480,13 +601,15 @@ export async function updateUserAction(userId: string, formData: FormData) {
     redirectAdminUsuarios({
       userError: getPrismaDuplicateMessage(error, "Não foi possível atualizar o usuário."),
       edit: userId,
+      ...getListContext(formData),
     });
   }
 }
 
-export async function toggleUserStatusAction(userId: string) {
+export async function toggleUserStatusAction(userId: string, formData: FormData) {
   try {
     const session = await requirePlanningAdmin();
+    const context = getListContext(formData);
     const current = await prisma.user.findUnique({
       where: { id: userId },
       include: {
@@ -523,6 +646,7 @@ export async function toggleUserStatusAction(userId: string) {
     revalidatePath("/dashboard/admin/usuarios");
     redirectAdminUsuarios({
       userSuccess: updated.status === UserStatus.ATIVO ? "Usuário reativado com sucesso." : "Usuário inativado com sucesso.",
+      ...context,
     });
   } catch (error) {
     if (isRedirectError(error)) {
@@ -531,6 +655,7 @@ export async function toggleUserStatusAction(userId: string) {
 
     redirectAdminUsuarios({
       userError: error instanceof Error ? error.message : "Não foi possível alterar o status do usuário.",
+      ...getListContext(formData),
     });
   }
 }
@@ -538,6 +663,7 @@ export async function toggleUserStatusAction(userId: string) {
 export async function resetUserPasswordAction(formData: FormData) {
   try {
     const session = await requirePlanningAdmin();
+    const context = getListContext(formData);
     const userId = String(formData.get("userId") ?? "").trim();
     const password = String(formData.get("password") ?? "").trim();
 
@@ -585,7 +711,7 @@ export async function resetUserPasswordAction(formData: FormData) {
 
     revalidatePath("/dashboard/admin/usuarios");
     revalidatePath("/dashboard/auditoria");
-    redirectAdminUsuarios({ resetSuccess: "Senha redefinida com sucesso." });
+    redirectAdminUsuarios({ resetSuccess: "Senha redefinida com sucesso.", ...context });
   } catch (error) {
     if (isRedirectError(error)) {
       throw error;
@@ -593,6 +719,7 @@ export async function resetUserPasswordAction(formData: FormData) {
 
     redirectAdminUsuarios({
       resetError: error instanceof Error ? error.message : "Não foi possível redefinir a senha.",
+      ...getListContext(formData),
     });
   }
 }
