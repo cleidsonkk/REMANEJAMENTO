@@ -10,6 +10,7 @@ import { createAuditLog } from "@/services/audit.service";
 import { getCurrentAuthenticatedUser } from "@/services/authorization.service";
 import {
   notifyAdminsAboutCreatedBatch,
+  notifyRequesterAboutCreatedBatch,
   notifyRequesterAboutAdministrativeReview,
   notifyRequesterAboutExecutedBatch,
 } from "@/services/notification.service";
@@ -180,6 +181,13 @@ export async function createRemanejamentoAction(formData: FormData) {
     solicitanteNome: user.nome,
     totalItens: created.length,
     actorUserId: user.id,
+  });
+
+  await notifyRequesterAboutCreatedBatch({
+    userId: user.id,
+    loteProtocolo,
+    secretariaNome: secretaria.nomeSecretaria,
+    totalItens: created.length,
   });
 
   revalidateRemanejamentoPaths();

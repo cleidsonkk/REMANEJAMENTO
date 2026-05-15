@@ -1,6 +1,7 @@
 "use client";
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { CalendarDays, Landmark, Plus, ReceiptText, Save, Trash2 } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm } from "react-hook-form";
@@ -126,6 +127,7 @@ export function RemanejamentoForm({
   secretarias: SecretariaOperacional[];
   correctionPreset?: CorrectionPreset | null;
 }) {
+  const router = useRouter();
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [draftLoaded, setDraftLoaded] = useState(false);
 
@@ -277,9 +279,12 @@ export function RemanejamentoForm({
       message: correctionPreset
         ? `Correcao reenviada no lote ${result?.protocolo ?? ""} com ${result?.totalItens ?? 0} ${
             result?.totalItens === 1 ? "item" : "itens"
-          }.`
-        : `Lote ${result?.protocolo ?? ""} registrado com ${result?.totalItens ?? 0} ${result?.totalItens === 1 ? "item" : "itens"}.`,
+          } e encaminhada para conferencia do administrador.`
+        : `Lote ${result?.protocolo ?? ""} registrado com ${result?.totalItens ?? 0} ${
+            result?.totalItens === 1 ? "item" : "itens"
+          } e enviado para conferencia do administrador.`,
     });
+    router.refresh();
   });
 
   if (!secretarias.length) {

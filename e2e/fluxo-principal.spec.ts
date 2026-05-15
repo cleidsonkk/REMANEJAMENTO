@@ -102,7 +102,7 @@ test("fluxo crítico de produção: admin cria usuário, usuário solicita lote 
       main.getByRole("button", { name: "Registrar lote" }).click(),
     ]);
 
-    const successMessage = page.locator("text=/Lote REM-.* registrado com 2 itens\\./").last();
+    const successMessage = page.locator("text=/Lote REM-.* registrado com 2 itens e enviado para conferencia do administrador\\./").last();
     await expect(successMessage).toBeVisible();
     const text = (await successMessage.textContent()) ?? "";
     const match = text.match(/(REM-\d{8}-[A-Z0-9]+)/);

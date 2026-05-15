@@ -108,6 +108,24 @@ export async function notifyAdminsAboutCreatedBatch(args: {
   });
 }
 
+export async function notifyRequesterAboutCreatedBatch(args: {
+  userId: string;
+  loteProtocolo: string;
+  secretariaNome: string;
+  totalItens: number;
+}) {
+  await createNotification({
+    userId: args.userId,
+    title: "Solicitacao enviada para analise",
+    message: `O lote ${args.loteProtocolo} da ${args.secretariaNome} foi enviado para conferencia administrativa. ${args.totalItens} ${
+      args.totalItens === 1 ? "item aguarda analise" : "itens aguardam analise"
+    }.`,
+    type: "REMANEJAMENTO_SUBMITTED",
+    relatedEntity: "LoteRemanejamento",
+    relatedEntityId: args.loteProtocolo,
+  });
+}
+
 export async function notifyRequesterAboutExecutedBatch(args: {
   userId: string;
   loteProtocolo: string;

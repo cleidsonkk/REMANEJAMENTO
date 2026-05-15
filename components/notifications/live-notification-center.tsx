@@ -24,6 +24,15 @@ type LiveNotificationCenterProps = {
 };
 
 function getNotificationTone(type: string) {
+  if (type === "REMANEJAMENTO_SUBMITTED") {
+    return {
+      label: "Solicitacao enviada",
+      icon: ClipboardCheck,
+      badgeClassName: "bg-sky-100 text-sky-900 border-sky-200",
+      cardClassName: "border-sky-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(240,249,255,0.96))]",
+    };
+  }
+
   if (type === "REMANEJAMENTO_EXECUTED") {
     return {
       label: "Execucao confirmada",
