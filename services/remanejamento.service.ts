@@ -57,6 +57,22 @@ export type RemanejamentoCorrectionLinkage = {
 
 export type RemanejamentoCorrectionLinkageMap = Record<string, RemanejamentoCorrectionLinkage>;
 
+export function getResubmittedCorrectionSourceLotes(logs: AuditLog[]) {
+  const resolvedLotes = new Set<string>();
+
+  for (const log of logs) {
+    if (log.entity !== "LoteRemanejamento" || log.action !== "RESUBMIT_FOR_CORRECTION") {
+      continue;
+    }
+
+    if (typeof log.entityId === "string" && log.entityId.trim()) {
+      resolvedLotes.add(log.entityId.trim());
+    }
+  }
+
+  return resolvedLotes;
+}
+
 function formatCorrectionCurrency(value: Prisma.Decimal | number) {
   return new Intl.NumberFormat("pt-BR", {
     minimumFractionDigits: 2,

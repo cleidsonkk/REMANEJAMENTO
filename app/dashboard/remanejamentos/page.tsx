@@ -15,6 +15,7 @@ import { formatCpf, formatCurrency, formatGovernmentCode } from "@/lib/utils";
 import {
   getRemanejamentoCorrectionLinkageMap,
   getRemanejamentoCorrectionPreset,
+  getResubmittedCorrectionSourceLotes,
   groupRemanejamentosByLote,
   listRemanejamentos,
 } from "@/services/remanejamento.service";
@@ -87,6 +88,7 @@ export default async function RemanejamentosPage({ searchParams }: { searchParam
   const term = typeof params.q === "string" ? params.q.trim().toLowerCase() : "";
   const statusFilter = typeof params.status === "string" ? params.status : "";
   const correctionOf = typeof params.correctionOf === "string" ? params.correctionOf : "";
+  const activeCorrectionOnly = params.activeCorrectionOnly === "1";
 
   const remanejamentos = await listRemanejamentos({
     role: session.user.role,
@@ -95,6 +97,28 @@ export default async function RemanejamentosPage({ searchParams }: { searchParam
   });
 
   const grouped = groupRemanejamentosByLote(remanejamentos);
+  const linkageLogs = grouped.length
+    ? await prisma.auditLog.findMany({
+        where: {
+          entity: "LoteRemanejamento",
+          entityId: {
+            in: grouped.map((group) => group.loteProtocolo),
+          },
+          action: {
+            in: ["CREATE_BATCH", "RESUBMIT_FOR_CORRECTION"],
+          },
+        },
+        orderBy: {
+          timestamp: "asc",
+        },
+      })
+    : [];
+  const correctionLinkageMap = getRemanejamentoCorrectionLinkageMap(
+    grouped.map((group) => group.loteProtocolo),
+    linkageLogs,
+  );
+  const resolvedCorrectionLotes = getResubmittedCorrectionSourceLotes(linkageLogs);
+
   const filteredGroups = grouped.filter((group) => {
     const matchesTerm =
       !term ||
@@ -117,7 +141,12 @@ export default async function RemanejamentosPage({ searchParams }: { searchParam
         .includes(term);
 
     const matchesStatus = !statusFilter || group.status === statusFilter;
-    return matchesTerm && matchesStatus;
+    const matchesActiveCorrection =
+      !activeCorrectionOnly ||
+      group.status !== "DEVOLVIDO_PARA_CORRECAO" ||
+      !resolvedCorrectionLotes.has(group.loteProtocolo);
+
+    return matchesTerm && matchesStatus && matchesActiveCorrection;
   });
 
   const pendingCount = filteredGroups.filter((item) => item.status === "PENDENTE").length;
@@ -125,26 +154,6 @@ export default async function RemanejamentosPage({ searchParams }: { searchParam
     session.user.role === "USUARIO_SECRETARIA" && correctionOf
       ? await getRemanejamentoCorrectionPreset(correctionOf, session.user.id)
       : null;
-  const linkageLogs = filteredGroups.length
-    ? await prisma.auditLog.findMany({
-        where: {
-          entity: "LoteRemanejamento",
-          entityId: {
-            in: filteredGroups.map((group) => group.loteProtocolo),
-          },
-          action: {
-            in: ["CREATE_BATCH", "RESUBMIT_FOR_CORRECTION"],
-          },
-        },
-        orderBy: {
-          timestamp: "asc",
-        },
-      })
-    : [];
-  const correctionLinkageMap = getRemanejamentoCorrectionLinkageMap(
-    filteredGroups.map((group) => group.loteProtocolo),
-    linkageLogs,
-  );
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },

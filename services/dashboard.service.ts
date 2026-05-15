@@ -2,6 +2,7 @@ import { RemanejamentoStatus, UserRole } from "@prisma/client";
 import { subMonths } from "date-fns";
 
 import { prisma } from "@/lib/prisma";
+import { getResubmittedCorrectionSourceLotes } from "@/services/remanejamento.service";
 
 export async function getDashboardData(userId: string, role: UserRole, secretariaId?: string | null) {
   const where =
@@ -12,7 +13,7 @@ export async function getDashboardData(userId: string, role: UserRole, secretari
           secretariaId: secretariaId ?? undefined,
         };
 
-  const [stats, monthSeries, secretarias, totalExecutado] = await Promise.all([
+  const [stats, monthSeries, secretarias, totalExecutado, devolvidosParaCorrecao, correctionAuditLogs] = await Promise.all([
     prisma.remanejamento.groupBy({
       by: ["status"],
       _count: true,
@@ -53,6 +54,33 @@ export async function getDashboardData(userId: string, role: UserRole, secretari
         destinoValor: true,
       },
     }),
+    prisma.remanejamento.findMany({
+      where: {
+        ...where,
+        status: RemanejamentoStatus.DEVOLVIDO_PARA_CORRECAO,
+      },
+      select: {
+        id: true,
+        loteProtocolo: true,
+        protocolo: true,
+      },
+    }),
+    prisma.auditLog.findMany({
+      where: {
+        entity: "LoteRemanejamento",
+        action: "RESUBMIT_FOR_CORRECTION",
+      },
+      select: {
+        id: true,
+        userId: true,
+        action: true,
+        entity: true,
+        entityId: true,
+        oldData: true,
+        newData: true,
+        timestamp: true,
+      },
+    }),
   ]);
 
   const kpiMap = {
@@ -68,9 +96,6 @@ export async function getDashboardData(userId: string, role: UserRole, secretari
     if (stat.status === RemanejamentoStatus.PENDENTE) {
       kpiMap.pendentes = stat._count;
     }
-    if (stat.status === RemanejamentoStatus.DEVOLVIDO_PARA_CORRECAO) {
-      kpiMap.devolvidasParaCorrecao = stat._count;
-    }
     if (stat.status === RemanejamentoStatus.REALIZADO) {
       kpiMap.realizadas = stat._count;
     }
@@ -78,6 +103,12 @@ export async function getDashboardData(userId: string, role: UserRole, secretari
       kpiMap.canceladas = stat._count;
     }
   }
+
+  const resolvedCorrectionLotes = getResubmittedCorrectionSourceLotes(correctionAuditLogs as never);
+  kpiMap.devolvidasParaCorrecao = devolvidosParaCorrecao.filter((item) => {
+    const loteProtocolo = item.loteProtocolo ?? item.protocolo;
+    return !resolvedCorrectionLotes.has(loteProtocolo);
+  }).length;
 
   const groupedByMonth = new Map<string, number>();
   for (const item of monthSeries) {

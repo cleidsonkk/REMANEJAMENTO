@@ -41,7 +41,7 @@ export default async function DashboardPage() {
       label: "Em correcao",
       value: dashboard.kpis.devolvidasParaCorrecao,
       hint: "Lotes devolvidos para ajuste e novo envio pela secretaria.",
-      href: "/dashboard/remanejamentos?status=DEVOLVIDO_PARA_CORRECAO",
+      href: "/dashboard/remanejamentos?status=DEVOLVIDO_PARA_CORRECAO&activeCorrectionOnly=1",
     },
     {
       label: "Realizadas",
@@ -66,7 +66,7 @@ export default async function DashboardPage() {
             hint: "Abra a fila de solicitacoes que ainda aguardam conferencia final.",
           },
           {
-            href: "/dashboard/remanejamentos?status=DEVOLVIDO_PARA_CORRECAO",
+            href: "/dashboard/remanejamentos?status=DEVOLVIDO_PARA_CORRECAO&activeCorrectionOnly=1",
             label: "Lotes em correcao",
             hint: "Acompanhe o que foi devolvido para ajuste e reenvio pela secretaria.",
           },
@@ -93,7 +93,7 @@ export default async function DashboardPage() {
             hint: "Acompanhe os lotes ainda em analise administrativa.",
           },
           {
-            href: "/dashboard/remanejamentos?status=DEVOLVIDO_PARA_CORRECAO",
+            href: "/dashboard/remanejamentos?status=DEVOLVIDO_PARA_CORRECAO&activeCorrectionOnly=1",
             label: "Ajustes solicitados",
             hint: "Veja o que foi devolvido para correcao pelo administrador.",
           },
