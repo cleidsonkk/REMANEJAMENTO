@@ -42,6 +42,24 @@ type SecretariaOperacional = {
   catalog: CatalogItem[];
 };
 
+type CorrectionPreset = {
+  sourceId: string;
+  loteProtocolo: string;
+  secretariaId: string;
+  justificativa: string;
+  reason: string;
+  entries: Array<{
+    destinoAcao: string;
+    destinoFonte: string;
+    destinoElemento: string;
+    destinoValor: string;
+    origemAcao: string;
+    origemFonte: string;
+    origemElemento: string;
+    origemValor: string;
+  }>;
+};
+
 function uniqueValues(items: CatalogItem[], field: keyof CatalogItem) {
   return Array.from(new Set(items.map((item) => String(item[field]).trim()).filter(Boolean)));
 }
@@ -102,9 +120,11 @@ function SuggestionField({
 export function RemanejamentoForm({
   draftScopeKey,
   secretarias,
+  correctionPreset,
 }: {
   draftScopeKey: string;
   secretarias: SecretariaOperacional[];
+  correctionPreset?: CorrectionPreset | null;
 }) {
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [draftLoaded, setDraftLoaded] = useState(false);
@@ -147,6 +167,16 @@ export function RemanejamentoForm({
   useEffect(() => {
     localStorage.removeItem("remanejamento-draft-v3");
 
+    if (correctionPreset) {
+      reset({
+        secretariaId: correctionPreset.secretariaId,
+        justificativa: correctionPreset.justificativa,
+        entries: (correctionPreset.entries.length ? correctionPreset.entries : [createEmptyRemanejamentoEntry()]) as never,
+      });
+      setDraftLoaded(true);
+      return;
+    }
+
     const raw = localStorage.getItem(draftKey);
     if (!raw) {
       setDraftLoaded(true);
@@ -170,7 +200,7 @@ export function RemanejamentoForm({
       entries: parsed.entries?.length ? parsed.entries : [createEmptyRemanejamentoEntry()],
     });
     setDraftLoaded(true);
-  }, [defaultSecretariaId, draftKey, reset, validSecretariaIds]);
+  }, [correctionPreset, defaultSecretariaId, draftKey, reset, validSecretariaIds]);
 
   useEffect(() => {
     if (!draftLoaded) {
@@ -225,6 +255,10 @@ export function RemanejamentoForm({
     form.append("secretariaId", data.secretariaId);
     form.append("justificativa", data.justificativa);
     form.append("entriesJson", JSON.stringify(data.entries));
+    if (correctionPreset) {
+      form.append("correctionSourceId", correctionPreset.sourceId);
+      form.append("correctionSourceLoteProtocolo", correctionPreset.loteProtocolo);
+    }
 
     const result = await createRemanejamentoAction(form);
     if (result?.error) {
@@ -240,7 +274,11 @@ export function RemanejamentoForm({
     });
     setFeedback({
       type: "success",
-      message: `Lote ${result?.protocolo ?? ""} registrado com ${result?.totalItens ?? 0} ${result?.totalItens === 1 ? "item" : "itens"}.`,
+      message: correctionPreset
+        ? `Correcao reenviada no lote ${result?.protocolo ?? ""} com ${result?.totalItens ?? 0} ${
+            result?.totalItens === 1 ? "item" : "itens"
+          }.`
+        : `Lote ${result?.protocolo ?? ""} registrado com ${result?.totalItens ?? 0} ${result?.totalItens === 1 ? "item" : "itens"}.`,
     });
   });
 
@@ -341,6 +379,14 @@ export function RemanejamentoForm({
             </p>
           </div>
 
+          {correctionPreset ? (
+            <div className="rounded-[1.5rem] border border-amber-200 bg-amber-50/80 p-4">
+              <p className="text-xs uppercase tracking-[0.22em] text-amber-900/70">Correcao solicitada</p>
+              <p className="mt-2 text-sm font-semibold text-amber-950">Lote original {correctionPreset.loteProtocolo}</p>
+              <p className="mt-3 text-sm leading-6 text-amber-900/85">{correctionPreset.reason}</p>
+            </div>
+          ) : null}
+
           <SectionNote>
             O sistema usa o catálogo da secretaria selecionada para sugerir ação, fonte e elemento. Se necessário, o operador
             também pode digitar manualmente os campos orçamentários.
@@ -348,6 +394,12 @@ export function RemanejamentoForm({
         </div>
 
         <form className="space-y-6" onSubmit={onSubmit}>
+          {correctionPreset ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              Revise os dados abaixo e reenvie a correcao como um novo lote. O historico anterior sera preservado.
+            </div>
+          ) : null}
+
           {feedback ? (
             <div
               className={`rounded-2xl border px-4 py-3 text-sm ${

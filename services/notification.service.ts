@@ -148,6 +148,33 @@ export async function notifyRequesterAboutExecutedBatch(args: {
   });
 }
 
+export async function notifyRequesterAboutAdministrativeReview(args: {
+  userId: string;
+  loteProtocolo: string;
+  secretariaNome: string;
+  totalItens: number;
+  adminName: string;
+  reason: string;
+  mode: "RETURN_FOR_CORRECTION" | "CANCEL";
+}) {
+  const title = args.mode === "RETURN_FOR_CORRECTION" ? "Solicitacao devolvida para correcao" : "Solicitacao cancelada";
+  const actionText =
+    args.mode === "RETURN_FOR_CORRECTION"
+      ? "devolveu o lote para correcao. Ajuste os dados e envie uma nova solicitacao."
+      : "cancelou o lote durante a conferencia administrativa.";
+
+  await createNotification({
+    userId: args.userId,
+    title,
+    message: `${args.adminName} ${actionText} Lote ${args.loteProtocolo} da ${args.secretariaNome} com ${args.totalItens} ${
+      args.totalItens === 1 ? "item" : "itens"
+    }. Motivo: ${args.reason}`,
+    type: args.mode === "RETURN_FOR_CORRECTION" ? "REMANEJAMENTO_RETURNED" : "REMANEJAMENTO_CANCELED",
+    relatedEntity: "LoteRemanejamento",
+    relatedEntityId: args.loteProtocolo,
+  });
+}
+
 export async function listNotificationsForUser(userId: string, limit = 40): Promise<NotificationListItem[]> {
   try {
     return await prisma.notification.findMany({

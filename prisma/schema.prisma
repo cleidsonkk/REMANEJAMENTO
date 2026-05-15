@@ -19,6 +19,7 @@ enum UserStatus {
 
 enum RemanejamentoStatus {
   PENDENTE
+  DEVOLVIDO_PARA_CORRECAO
   REALIZADO
   CANCELADO
 }

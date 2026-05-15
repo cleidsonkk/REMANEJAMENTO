@@ -58,6 +58,7 @@ export async function getDashboardData(userId: string, role: UserRole, secretari
   const kpiMap = {
     total: 0,
     pendentes: 0,
+    devolvidasParaCorrecao: 0,
     realizadas: 0,
     canceladas: 0,
   };
@@ -66,6 +67,9 @@ export async function getDashboardData(userId: string, role: UserRole, secretari
     kpiMap.total += stat._count;
     if (stat.status === RemanejamentoStatus.PENDENTE) {
       kpiMap.pendentes = stat._count;
+    }
+    if (stat.status === RemanejamentoStatus.DEVOLVIDO_PARA_CORRECAO) {
+      kpiMap.devolvidasParaCorrecao = stat._count;
     }
     if (stat.status === RemanejamentoStatus.REALIZADO) {
       kpiMap.realizadas = stat._count;

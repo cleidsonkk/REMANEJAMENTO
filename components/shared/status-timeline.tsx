@@ -3,7 +3,7 @@ import { CheckCircle2, CircleDashed, Clock3, FilePlus2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TimelineEvent } from "@/services/remanejamento.service";
 
-type TimelineStatus = "PENDENTE" | "REALIZADO" | "CANCELADO";
+type TimelineStatus = "PENDENTE" | "DEVOLVIDO_PARA_CORRECAO" | "REALIZADO" | "CANCELADO";
 
 function formatTimelineDate(timestamp: Date | null) {
   if (!timestamp) {
@@ -36,16 +36,34 @@ export function StatusTimeline({
       },
       {
         id: "analysis",
-        label: status === "REALIZADO" ? "Executada" : status === "CANCELADO" ? "Encerrada" : "Em análise",
-        detail: executedAtLabel ?? (status === "PENDENTE" ? "Aguardando ação administrativa" : "Sem data informada"),
+        label:
+          status === "REALIZADO"
+            ? "Executada"
+            : status === "CANCELADO"
+              ? "Encerrada"
+              : status === "DEVOLVIDO_PARA_CORRECAO"
+                ? "Devolvida para correcao"
+                : "Em analise",
+        detail:
+          executedAtLabel ??
+          (status === "PENDENTE"
+            ? "Aguardando acao administrativa"
+            : status === "DEVOLVIDO_PARA_CORRECAO"
+              ? "Aguardando ajustes da secretaria"
+              : "Sem data informada"),
         tone: status === "PENDENTE" ? ("current" as const) : ("done" as const),
         timestamp: null,
       },
       {
         id: "audit",
         label: "Auditada",
-        detail: status === "REALIZADO" ? "Registro consolidado" : "Aguardando consolidação",
-        tone: status === "REALIZADO" ? ("done" as const) : ("pending" as const),
+        detail:
+          status === "REALIZADO"
+            ? "Registro consolidado"
+            : status === "DEVOLVIDO_PARA_CORRECAO"
+              ? "Lote retornado e aguardando novo envio"
+              : "Aguardando consolidacao",
+        tone: status === "REALIZADO" ? ("done" as const) : status === "DEVOLVIDO_PARA_CORRECAO" ? ("done" as const) : ("pending" as const),
         timestamp: null,
       },
     ];

@@ -22,30 +22,37 @@ export default async function DashboardPage() {
   const taxaConclusao = dashboard.kpis.total ? Math.round((dashboard.kpis.realizadas / dashboard.kpis.total) * 100) : 0;
   const secretariaLider = dashboard.secretarias[0] ?? null;
   const ultimoMes = dashboard.monthSeries.at(-1) ?? null;
+  const totalEmAtencao = dashboard.kpis.pendentes + dashboard.kpis.devolvidasParaCorrecao;
 
   const cards = [
     {
       label: "Total",
       value: dashboard.kpis.total,
-      hint: "Solicitações registradas no escopo visível ao perfil autenticado.",
+      hint: "Solicitacoes registradas no escopo visivel ao perfil autenticado.",
       href: "/dashboard/remanejamentos",
     },
     {
       label: "Pendentes",
       value: dashboard.kpis.pendentes,
-      hint: "Solicitações aguardando análise administrativa.",
+      hint: "Solicitacoes aguardando analise administrativa.",
       href: "/dashboard/remanejamentos?status=PENDENTE",
+    },
+    {
+      label: "Em correcao",
+      value: dashboard.kpis.devolvidasParaCorrecao,
+      hint: "Lotes devolvidos para ajuste e novo envio pela secretaria.",
+      href: "/dashboard/remanejamentos?status=DEVOLVIDO_PARA_CORRECAO",
     },
     {
       label: "Realizadas",
       value: dashboard.kpis.realizadas,
-      hint: "Itens consolidados no histórico executivo.",
+      hint: "Itens consolidados no historico executivo.",
       href: "/dashboard/executados",
     },
     {
       label: "Canceladas",
       value: dashboard.kpis.canceladas,
-      hint: "Registros encerrados sem efetivação orçamentária.",
+      hint: "Registros encerrados sem efetivacao orcamentaria.",
       href: "/dashboard/remanejamentos?status=CANCELADO",
     },
   ];
@@ -55,30 +62,40 @@ export default async function DashboardPage() {
       ? [
           {
             href: "/dashboard/remanejamentos?status=PENDENTE",
-            label: "Pendências administrativas",
-            hint: "Abra a fila de solicitações que ainda aguardam conferência final.",
+            label: "Pendencias administrativas",
+            hint: "Abra a fila de solicitacoes que ainda aguardam conferencia final.",
+          },
+          {
+            href: "/dashboard/remanejamentos?status=DEVOLVIDO_PARA_CORRECAO",
+            label: "Lotes em correcao",
+            hint: "Acompanhe o que foi devolvido para ajuste e reenvio pela secretaria.",
           },
           {
             href: "/dashboard/executados",
             label: "Executados consolidados",
-            hint: "Consulte o histórico financeiro já efetivado no sistema.",
+            hint: "Consulte o historico financeiro ja efetivado no sistema.",
           },
           {
             href: "/dashboard/busca",
             label: "Busca global",
-            hint: "Localize protocolos, CPFs, secretarias e usuários em um único fluxo.",
+            hint: "Localize protocolos, CPFs, secretarias e usuarios em um unico fluxo.",
           },
         ]
       : [
           {
             href: "/dashboard/remanejamentos",
-            label: "Nova solicitação",
-            hint: "Registre remanejamentos com base no catálogo da sua secretaria.",
+            label: "Nova solicitacao",
+            hint: "Registre remanejamentos com base no catalogo da sua secretaria.",
           },
           {
             href: "/dashboard/remanejamentos?status=PENDENTE",
             label: "Acompanhamento",
-            hint: "Acompanhe os lotes ainda em análise administrativa.",
+            hint: "Acompanhe os lotes ainda em analise administrativa.",
+          },
+          {
+            href: "/dashboard/remanejamentos?status=DEVOLVIDO_PARA_CORRECAO",
+            label: "Ajustes solicitados",
+            hint: "Veja o que foi devolvido para correcao pelo administrador.",
           },
         ];
 
@@ -87,7 +104,7 @@ export default async function DashboardPage() {
       <PageHeader
         eyebrow="Painel institucional"
         title="Acompanhamento executivo do remanejamento"
-        description="Leitura consolidada das solicitações, do volume movimentado e das prioridades operacionais por secretaria."
+        description="Leitura consolidada das solicitacoes, do volume movimentado e das prioridades operacionais por secretaria."
         aside={
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="panel-dark-soft min-w-0 p-4">
@@ -97,21 +114,21 @@ export default async function DashboardPage() {
             </div>
             <div className="panel-dark-soft min-w-0 p-4">
               <TrendingUp className="h-5 w-5 text-amber-200" />
-              <p className="mt-3 text-sm text-white/70">Direção gerencial</p>
-              <p className="mt-1 text-lg font-semibold text-white">Distribuição setorial</p>
+              <p className="mt-3 text-sm text-white/70">Direcao gerencial</p>
+              <p className="mt-1 text-lg font-semibold text-white">Distribuicao setorial</p>
             </div>
           </div>
         }
       />
 
-      <section className="grid gap-4 xl:grid-cols-4">
+      <section className="grid gap-4 xl:grid-cols-5">
         {cards.map((card) => (
           <MetricCard key={card.label} hint={card.hint} href={card.href} label={card.label} value={card.value} />
         ))}
       </section>
 
       <section className="grid gap-5 2xl:grid-cols-[minmax(0,1.24fr),minmax(320px,0.76fr)]">
-        <div className="panel-dark min-w-0 p-5 sm:p-7 text-white">
+        <div className="panel-dark min-w-0 p-5 text-white sm:p-7">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0 flex-1">
               <p className="text-xs uppercase tracking-[0.24em] text-slate-300">Volume consolidado</p>
@@ -127,7 +144,7 @@ export default async function DashboardPage() {
                 </h2>
               </div>
               <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-200 md:text-[15px]">
-                Total movimentado pelas solicitações dentro do recorte atual, com leitura voltada ao acompanhamento executivo.
+                Total movimentado pelas solicitacoes dentro do recorte atual, com leitura voltada ao acompanhamento executivo.
               </p>
             </div>
 
@@ -138,39 +155,39 @@ export default async function DashboardPage() {
 
           <div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div className="min-w-0 rounded-[1.5rem] border border-white/10 bg-white/6 p-4">
-              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300">Ticket médio</p>
+              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300">Ticket medio</p>
               <p className="mt-3 text-lg font-semibold text-white">{formatCurrency(ticketMedio)}</p>
-              <p className="mt-2 text-sm leading-6 text-slate-200">Valor médio por solicitação registrada.</p>
+              <p className="mt-2 text-sm leading-6 text-slate-200">Valor medio por solicitacao registrada.</p>
             </div>
             <div className="min-w-0 rounded-[1.5rem] border border-white/10 bg-white/6 p-4">
-              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300">Conclusão</p>
+              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300">Conclusao</p>
               <p className="mt-3 text-lg font-semibold text-white">{taxaConclusao}%</p>
-              <p className="mt-2 text-sm leading-6 text-slate-200">Percentual do fluxo já encerrado como realizado.</p>
+              <p className="mt-2 text-sm leading-6 text-slate-200">Percentual do fluxo ja encerrado como realizado.</p>
             </div>
             <div className="min-w-0 rounded-[1.5rem] border border-white/10 bg-white/6 p-4">
-              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300">Secretaria líder</p>
+              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300">Secretaria lider</p>
               <p className="mt-3 line-clamp-2 text-base font-semibold text-white">
                 {secretariaLider?.secretaria ?? "Sem dados setoriais"}
               </p>
               <p className="mt-2 text-sm leading-6 text-slate-200">
-                {secretariaLider ? `${secretariaLider.quantidade} solicitações no ranking atual.` : "Ainda sem movimentação consolidada."}
+                {secretariaLider ? `${secretariaLider.quantidade} solicitacoes no ranking atual.` : "Ainda sem movimentacao consolidada."}
               </p>
             </div>
             <div className="min-w-0 rounded-[1.5rem] border border-white/10 bg-white/6 p-4">
-              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300">Última referência</p>
-              <p className="mt-3 text-lg font-semibold text-white">{ultimoMes?.mes ?? "Sem série"}</p>
+              <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300">Ultima referencia</p>
+              <p className="mt-3 text-lg font-semibold text-white">{ultimoMes?.mes ?? "Sem serie"}</p>
               <p className="mt-2 text-sm leading-6 text-slate-200">
-                {ultimoMes ? `${formatCurrency(ultimoMes.valor)} movimentados no período mais recente.` : "Sem base recente para comparação."}
+                {ultimoMes ? `${formatCurrency(ultimoMes.valor)} movimentados no periodo mais recente.` : "Sem base recente para comparacao."}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="panel-dark min-w-0 p-5 sm:p-7 text-white">
+        <div className="panel-dark min-w-0 p-5 text-white sm:p-7">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs uppercase tracking-[0.24em] text-slate-300">Prioridades do ambiente</p>
-            <Badge className="whitespace-nowrap self-start sm:self-auto" variant={dashboard.kpis.pendentes > 0 ? "warning" : "success"}>
-              {dashboard.kpis.pendentes > 0 ? `${dashboard.kpis.pendentes} pendentes` : "Sem fila crítica"}
+            <Badge className="whitespace-nowrap self-start sm:self-auto" variant={totalEmAtencao > 0 ? "warning" : "success"}>
+              {totalEmAtencao > 0 ? `${totalEmAtencao} em atencao` : "Sem fila critica"}
             </Badge>
           </div>
           <div className="mt-5 space-y-4">
@@ -180,7 +197,7 @@ export default async function DashboardPage() {
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-white">Fila administrativa</p>
                   <p className="mt-2 text-sm leading-7 text-slate-200">
-                    Priorize as solicitações pendentes por secretaria, volume e urgência operacional.
+                    Priorize as solicitacoes pendentes por secretaria, volume e urgencia operacional.
                   </p>
                 </div>
               </div>
@@ -189,9 +206,9 @@ export default async function DashboardPage() {
               <div className="flex items-start gap-3">
                 <TrendingUp className="mt-1 h-5 w-5 text-amber-200" />
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-white">Trilha de governança</p>
+                  <p className="text-sm font-semibold text-white">Trilha de governanca</p>
                   <p className="mt-2 text-sm leading-7 text-slate-200">
-                    Cada execução preserva origem, destino, valores, protocolo e auditoria institucional.
+                    Cada execucao ou devolucao preserva origem, destino, valores, protocolo e auditoria institucional.
                   </p>
                 </div>
               </div>
@@ -200,10 +217,10 @@ export default async function DashboardPage() {
               <div className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(7,25,42,0.98),rgba(13,58,78,0.96))] p-5 text-white">
                 <div className="flex items-center gap-2 text-sm font-semibold">
                   <ScanSearch className="h-4 w-4 text-amber-200" />
-                  Ação rápida disponível
+                  Acao rapida disponivel
                 </div>
                 <p className="mt-2 text-sm leading-7 text-slate-200">
-                  Use a busca global para localizar protocolos, CPFs, secretarias e usuários com rapidez.
+                  Use a busca global para localizar protocolos, CPFs, secretarias e usuarios com rapidez.
                 </p>
               </div>
             ) : null}
@@ -211,7 +228,7 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-3">
+      <section className="grid gap-4 lg:grid-cols-4">
         {quickActions.map((action) => (
           <Link
             key={action.href}

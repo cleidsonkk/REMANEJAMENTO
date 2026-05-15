@@ -14,6 +14,18 @@ import { requireRole } from "@/services/authorization.service";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
+function getStatusBadgeVariant(status: string) {
+  if (status === "REALIZADO") {
+    return "success" as const;
+  }
+
+  if (status === "CANCELADO") {
+    return "danger" as const;
+  }
+
+  return "warning" as const;
+}
+
 function ResultHeader({
   title,
   count,
@@ -187,9 +199,7 @@ export default async function BuscaPage({ searchParams }: { searchParams: Search
                       <p className="font-semibold">{item.protocolo}</p>
                       <p className="mt-1 line-clamp-2 text-muted-foreground">{item.nomeSecretaria}</p>
                     </div>
-                    <Badge variant={item.status === "REALIZADO" ? "success" : item.status === "CANCELADO" ? "danger" : "warning"}>
-                      {item.status}
-                    </Badge>
+                    <Badge variant={getStatusBadgeVariant(item.status)}>{item.status}</Badge>
                   </div>
                   <p className="mt-3 text-muted-foreground">
                     {item.nomeSolicitante} • {formatCpf(item.cpfSolicitante)}
