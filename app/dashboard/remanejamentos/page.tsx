@@ -65,6 +65,32 @@ function getCorrectionTag(linkage: { correctedFromLoteProtocolo: string | null; 
   return null;
 }
 
+function getSubmissionFeedback(params: Record<string, string | string[] | undefined>) {
+  const success = typeof params.success === "string" ? params.success : "";
+  const protocol = typeof params.protocol === "string" ? params.protocol.trim() : "";
+  const items = typeof params.items === "string" ? Number(params.items) : 0;
+
+  if (!success || !protocol || !Number.isFinite(items) || items <= 0) {
+    return null;
+  }
+
+  if (success === "correction") {
+    return {
+      type: "success" as const,
+      message: `A correcao do lote ${protocol} foi recebida com ${items} ${items === 1 ? "item" : "itens"} e encaminhada para nova conferencia do administrador.`,
+    };
+  }
+
+  if (success === "new") {
+    return {
+      type: "success" as const,
+      message: `O lote ${protocol} foi enviado com ${items} ${items === 1 ? "item" : "itens"} e agora aguarda conferencia administrativa.`,
+    };
+  }
+
+  return null;
+}
+
 function LoteItemPreview({ item }: { item: LoteItem }) {
   return (
     <div className="rounded-2xl border border-slate-200/70 bg-slate-50/80 p-4">
@@ -89,6 +115,7 @@ export default async function RemanejamentosPage({ searchParams }: { searchParam
   const statusFilter = typeof params.status === "string" ? params.status : "";
   const correctionOf = typeof params.correctionOf === "string" ? params.correctionOf : "";
   const activeCorrectionOnly = params.activeCorrectionOnly === "1";
+  const submissionFeedback = getSubmissionFeedback(params);
 
   const remanejamentos = await listRemanejamentos({
     role: session.user.role,
@@ -217,7 +244,12 @@ export default async function RemanejamentosPage({ searchParams }: { searchParam
       />
 
       {session.user.role === "USUARIO_SECRETARIA" ? (
-        <RemanejamentoForm correctionPreset={correctionPreset} draftScopeKey={session.user.id} secretarias={secretariasOperacionais} />
+        <RemanejamentoForm
+          correctionPreset={correctionPreset}
+          draftScopeKey={session.user.id}
+          initialFeedback={submissionFeedback}
+          secretarias={secretariasOperacionais}
+        />
       ) : null}
 
       <Card className="border-white/70 bg-white/92">

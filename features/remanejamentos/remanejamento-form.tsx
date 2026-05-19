@@ -1,8 +1,8 @@
 "use client";
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { CalendarDays, Landmark, Plus, ReceiptText, Save, Trash2 } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { CalendarDays, CheckCircle2, Landmark, Plus, ReceiptText, Save, ShieldCheck, Trash2 } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm } from "react-hook-form";
 
@@ -122,14 +122,18 @@ export function RemanejamentoForm({
   draftScopeKey,
   secretarias,
   correctionPreset,
+  initialFeedback,
 }: {
   draftScopeKey: string;
   secretarias: SecretariaOperacional[];
   correctionPreset?: CorrectionPreset | null;
+  initialFeedback?: { type: "success" | "error"; message: string } | null;
 }) {
   const router = useRouter();
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const pathname = usePathname();
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(initialFeedback ?? null);
   const [draftLoaded, setDraftLoaded] = useState(false);
+  const [activeCorrectionPreset, setActiveCorrectionPreset] = useState(correctionPreset ?? null);
 
   const defaultSecretariaId = secretarias.find((item) => item.isDefault)?.id ?? secretarias[0]?.id ?? "";
   const draftKey = useMemo(() => buildRemanejamentoDraftKey(draftScopeKey), [draftScopeKey]);
@@ -169,11 +173,13 @@ export function RemanejamentoForm({
   useEffect(() => {
     localStorage.removeItem("remanejamento-draft-v3");
 
-    if (correctionPreset) {
+    if (activeCorrectionPreset) {
       reset({
-        secretariaId: correctionPreset.secretariaId,
-        justificativa: correctionPreset.justificativa,
-        entries: (correctionPreset.entries.length ? correctionPreset.entries : [createEmptyRemanejamentoEntry()]) as never,
+        secretariaId: activeCorrectionPreset.secretariaId,
+        justificativa: activeCorrectionPreset.justificativa,
+        entries: (activeCorrectionPreset.entries.length
+          ? activeCorrectionPreset.entries
+          : [createEmptyRemanejamentoEntry()]) as never,
       });
       setDraftLoaded(true);
       return;
@@ -202,7 +208,15 @@ export function RemanejamentoForm({
       entries: parsed.entries?.length ? parsed.entries : [createEmptyRemanejamentoEntry()],
     });
     setDraftLoaded(true);
-  }, [correctionPreset, defaultSecretariaId, draftKey, reset, validSecretariaIds]);
+  }, [activeCorrectionPreset, defaultSecretariaId, draftKey, reset, validSecretariaIds]);
+
+  useEffect(() => {
+    setActiveCorrectionPreset(correctionPreset ?? null);
+  }, [correctionPreset]);
+
+  useEffect(() => {
+    setFeedback(initialFeedback ?? null);
+  }, [initialFeedback]);
 
   useEffect(() => {
     if (!draftLoaded) {
@@ -257,9 +271,9 @@ export function RemanejamentoForm({
     form.append("secretariaId", data.secretariaId);
     form.append("justificativa", data.justificativa);
     form.append("entriesJson", JSON.stringify(data.entries));
-    if (correctionPreset) {
-      form.append("correctionSourceId", correctionPreset.sourceId);
-      form.append("correctionSourceLoteProtocolo", correctionPreset.loteProtocolo);
+    if (activeCorrectionPreset) {
+      form.append("correctionSourceId", activeCorrectionPreset.sourceId);
+      form.append("correctionSourceLoteProtocolo", activeCorrectionPreset.loteProtocolo);
     }
 
     const result = await createRemanejamentoAction(form);
@@ -274,16 +288,15 @@ export function RemanejamentoForm({
       justificativa: "",
       entries: [createEmptyRemanejamentoEntry()],
     });
-    setFeedback({
-      type: "success",
-      message: correctionPreset
-        ? `Correcao reenviada no lote ${result?.protocolo ?? ""} com ${result?.totalItens ?? 0} ${
-            result?.totalItens === 1 ? "item" : "itens"
-          } e encaminhada para conferencia do administrador.`
-        : `Lote ${result?.protocolo ?? ""} registrado com ${result?.totalItens ?? 0} ${
-            result?.totalItens === 1 ? "item" : "itens"
-          } e enviado para conferencia do administrador.`,
-    });
+    const successMode = activeCorrectionPreset ? "correction" : "new";
+    setActiveCorrectionPreset(null);
+
+    const nextUrl = new URL(pathname, window.location.origin);
+    nextUrl.searchParams.set("success", successMode);
+    nextUrl.searchParams.set("protocol", result?.protocolo ?? "");
+    nextUrl.searchParams.set("items", String(result?.totalItens ?? 0));
+
+    router.replace(nextUrl.pathname + nextUrl.search);
     router.refresh();
   });
 
@@ -384,11 +397,11 @@ export function RemanejamentoForm({
             </p>
           </div>
 
-          {correctionPreset ? (
+          {activeCorrectionPreset ? (
             <div className="rounded-[1.5rem] border border-amber-200 bg-amber-50/80 p-4">
               <p className="text-xs uppercase tracking-[0.22em] text-amber-900/70">Correcao solicitada</p>
-              <p className="mt-2 text-sm font-semibold text-amber-950">Lote original {correctionPreset.loteProtocolo}</p>
-              <p className="mt-3 text-sm leading-6 text-amber-900/85">{correctionPreset.reason}</p>
+              <p className="mt-2 text-sm font-semibold text-amber-950">Lote original {activeCorrectionPreset.loteProtocolo}</p>
+              <p className="mt-3 text-sm leading-6 text-amber-900/85">{activeCorrectionPreset.reason}</p>
             </div>
           ) : null}
 
@@ -399,7 +412,7 @@ export function RemanejamentoForm({
         </div>
 
         <form className="space-y-6" onSubmit={onSubmit}>
-          {correctionPreset ? (
+          {activeCorrectionPreset ? (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
               Revise os dados abaixo e reenvie a correcao como um novo lote. O historico anterior sera preservado.
             </div>
@@ -413,7 +426,21 @@ export function RemanejamentoForm({
                   : "border-rose-200 bg-rose-50 text-rose-900"
               }`}
             >
-              {feedback.message}
+              {feedback.type === "success" ? (
+                <div className="flex gap-3">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
+                  <div className="space-y-2">
+                    <p className="font-semibold">Solicitacao registrada com sucesso</p>
+                    <p>{feedback.message}</p>
+                    <div className="flex gap-2 rounded-xl border border-emerald-200/80 bg-white/70 px-3 py-2 text-xs leading-5 text-emerald-950">
+                      <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>O envio foi concluido e registrado no sistema. Aguarde a analise administrativa antes de tentar reenviar.</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                feedback.message
+              )}
             </div>
           ) : null}
 
@@ -565,7 +592,7 @@ export function RemanejamentoForm({
               </p>
             </div>
             <Button className="md:min-w-[240px]" disabled={isSubmitting} type="submit">
-              {isSubmitting ? "Enviando lote..." : "Registrar lote"}
+              {isSubmitting ? "Enviando lote..." : activeCorrectionPreset ? "Reenviar correcao" : "Registrar lote"}
             </Button>
           </div>
         </form>
